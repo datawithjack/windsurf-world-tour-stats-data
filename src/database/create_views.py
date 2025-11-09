@@ -285,6 +285,92 @@ def create_athlete_summary_view(cursor):
     cursor.execute(view_sql)
     print("  [OK] ATHLETE_SUMMARY_VIEW created successfully")
 
+def create_event_stats_view(cursor):
+    """
+    Create a view for event statistics with pre-joined score types.
+
+    This view combines:
+    - PWA_IWT_EVENTS (event details)
+    - PWA_IWT_HEAT_RESULTS (heat totals)
+    - PWA_IWT_HEAT_SCORES (individual wave/jump scores)
+    - SCORE_TYPES (move type names)
+
+    Features:
+    - Human-readable move type names (Forward Loop, Backloop, etc.)
+    - Pre-joined event information
+    - Simplified querying for statistics endpoint
+    """
+
+    print("\nCreating EVENT_STATS_VIEW...")
+
+    # Drop view if exists
+    cursor.execute("DROP VIEW IF EXISTS EVENT_STATS_VIEW")
+
+    # Create view
+    view_sql = """
+    CREATE VIEW EVENT_STATS_VIEW AS
+    SELECT
+        -- Event information
+        e.id AS event_db_id,
+        e.event_id AS pwa_event_id,
+        e.event_name,
+        e.year AS event_year,
+        e.source,
+
+        -- Score details
+        s.id AS score_id,
+        s.heat_id,
+        s.athlete_id,
+        s.athlete_name,
+        s.sail_number,
+        COALESCE(NULLIF(s.sex, ''), hp.sex) AS sex,
+        s.pwa_division_code AS division_code,
+
+        -- Score values
+        ROUND(s.score, 2) AS score,
+        s.type AS score_type_code,
+        COALESCE(st.Type_Name, s.type) AS move_type,
+        s.counting,
+
+        -- Aggregated totals
+        ROUND(s.total_wave, 2) AS total_wave,
+        ROUND(s.total_jump, 2) AS total_jump,
+        ROUND(s.total_points, 2) AS total_points,
+
+        -- Metadata
+        s.scraped_at,
+        s.created_at
+
+    FROM PWA_IWT_HEAT_SCORES s
+
+    -- Join to event details
+    INNER JOIN PWA_IWT_EVENTS e
+        ON s.pwa_event_id = e.event_id
+        AND s.source = e.source
+
+    -- Join to heat progression for sex (match on event + division)
+    LEFT JOIN (
+        SELECT DISTINCT pwa_event_id, pwa_division_code, sex, source
+        FROM PWA_IWT_HEAT_PROGRESSION
+    ) hp
+        ON s.source = hp.source
+        AND s.pwa_event_id = hp.pwa_event_id
+        AND s.pwa_division_code = hp.pwa_division_code
+
+    -- Join to score types for move names
+    LEFT JOIN SCORE_TYPES st
+        ON s.type = st.Type
+
+    WHERE s.athlete_id IS NOT NULL
+      AND s.athlete_id != ''
+      AND s.score IS NOT NULL
+
+    ORDER BY e.year DESC, e.event_id, s.heat_id, s.score DESC
+    """
+
+    cursor.execute(view_sql)
+    print("  [OK] EVENT_STATS_VIEW created successfully")
+
 def verify_views(cursor):
     """Verify views were created and show sample data"""
 
@@ -326,6 +412,22 @@ def verify_views(cursor):
     for row in cursor.fetchall():
         print(f"  {row[0]} ({row[1]}) - {row[2]} events, {row[3]} wins, {row[4]} podiums, best: {row[5]}")
 
+    # Check EVENT_STATS_VIEW
+    cursor.execute("SELECT COUNT(*) FROM EVENT_STATS_VIEW")
+    count = cursor.fetchone()[0]
+    print(f"\nEVENT_STATS_VIEW: {count} score records")
+
+    cursor.execute("""
+        SELECT event_name, move_type, MAX(score) as best_score, COUNT(*) as score_count
+        FROM EVENT_STATS_VIEW
+        GROUP BY event_name, move_type
+        ORDER BY event_name DESC, best_score DESC
+        LIMIT 10
+    """)
+    print("\nSample event statistics (top 10 move type stats):")
+    for row in cursor.fetchall():
+        print(f"  {row[0][:30]} - {row[1]}: best {row[2]}, {row[3]} scores")
+
 def main():
     """Main execution function"""
     print("Creating Database Views")
@@ -342,6 +444,7 @@ def main():
         create_athlete_results_view(cursor)
         create_athlete_heat_results_view(cursor)
         create_athlete_summary_view(cursor)
+        create_event_stats_view(cursor)
 
         # Commit changes
         conn.commit()
@@ -358,6 +461,7 @@ def main():
         print("1. ATHLETE_RESULTS_VIEW - Competition results with athlete profiles")
         print("2. ATHLETE_HEAT_RESULTS_VIEW - Heat-by-heat results with athlete profiles")
         print("3. ATHLETE_SUMMARY_VIEW - Career statistics for each athlete")
+        print("4. EVENT_STATS_VIEW - Event statistics with score types and move names")
 
     except mysql.connector.Error as err:
         print(f"\n[ERROR] DATABASE ERROR: {err}")

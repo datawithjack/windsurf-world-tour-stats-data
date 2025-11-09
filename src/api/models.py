@@ -279,6 +279,273 @@ class AthleteResultsResponse(BaseModel):
 
 
 # ============================================================================
+# Event Stats Models
+# ============================================================================
+
+class ScoreDetail(BaseModel):
+    """
+    Score detail with athlete information
+
+    Base model for best scores in summary statistics.
+    """
+    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    athlete_name: str = Field(..., description="Athlete name")
+    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    heat_number: str = Field(..., description="Heat number/identifier")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "score": 24.50,
+                "athlete_name": "Degrieck",
+                "athlete_id": "456",
+                "heat_number": "21a"
+            }
+        }
+
+
+class JumpScoreDetail(ScoreDetail):
+    """
+    Jump score detail with move type
+
+    Extends ScoreDetail with move type information for jump scores.
+    """
+    move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "score": 7.10,
+                "athlete_name": "Ruano Moreno",
+                "athlete_id": "789",
+                "heat_number": "19a",
+                "move_type": "Forward Loop"
+            }
+        }
+
+
+class BestScoredBy(BaseModel):
+    """
+    Information about who scored the best for a move type
+
+    Used in MoveTypeStat to indicate the athlete who achieved the best score.
+    """
+    athlete_name: str = Field(..., description="Athlete name")
+    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    heat_number: str = Field(..., description="Heat number/identifier")
+    score: float = Field(..., description="Score value")
+
+    class Config:
+        from_attributes = True
+
+
+class MoveTypeStat(BaseModel):
+    """
+    Move type statistics
+
+    Aggregated statistics for a specific move type (e.g., Wave, Forward Loop).
+    """
+    move_type: str = Field(..., description="Move type name")
+    best_score: float = Field(..., description="Highest score for this move type")
+    average_score: float = Field(..., description="Average score for this move type (rounded to 2 decimals)")
+    best_scored_by: BestScoredBy = Field(..., description="Athlete who scored the best")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "move_type": "Wave",
+                "best_score": 7.50,
+                "average_score": 2.95,
+                "best_scored_by": {
+                    "athlete_name": "Degrieck",
+                    "athlete_id": "456",
+                    "heat_number": "21a",
+                    "score": 7.50
+                }
+            }
+        }
+
+
+class ScoreEntry(BaseModel):
+    """
+    Score table entry
+
+    Single entry in the top scores tables with rank.
+    """
+    rank: int = Field(..., description="Rank position (sequential, starting at 1)")
+    athlete_name: str = Field(..., description="Athlete name")
+    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    heat_number: str = Field(..., description="Heat number/identifier")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "rank": 1,
+                "athlete_name": "Degrieck",
+                "athlete_id": "456",
+                "score": 24.50,
+                "heat_number": "21a"
+            }
+        }
+
+
+class JumpScoreEntry(ScoreEntry):
+    """
+    Jump score table entry
+
+    Extends ScoreEntry with move type for jump scores.
+    """
+    move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "rank": 1,
+                "athlete_name": "Ruano Moreno",
+                "athlete_id": "789",
+                "score": 7.10,
+                "move_type": "Forward Loop",
+                "heat_number": "19a"
+            }
+        }
+
+
+class SummaryStats(BaseModel):
+    """
+    Summary statistics
+
+    Best scores across all categories for an event.
+    """
+    best_heat_score: Optional[ScoreDetail] = Field(None, description="Best overall heat score")
+    best_jump_score: Optional[JumpScoreDetail] = Field(None, description="Best individual jump score")
+    best_wave_score: Optional[ScoreDetail] = Field(None, description="Best individual wave score")
+
+    class Config:
+        from_attributes = True
+
+
+class EventStatsMetadata(BaseModel):
+    """
+    Event statistics metadata
+
+    Metadata about the event statistics data.
+    """
+    total_heats: int = Field(..., description="Total number of heats")
+    total_athletes: int = Field(..., description="Total number of athletes")
+    generated_at: datetime = Field(..., description="Timestamp when stats were generated (ISO 8601)")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "total_heats": 52,
+                "total_athletes": 26,
+                "generated_at": "2025-11-09T17:45:00Z"
+            }
+        }
+
+
+class EventStatsResponse(BaseModel):
+    """
+    Event statistics response
+
+    Complete event statistics including summary, move type analysis, and top scores.
+    """
+    event_id: int = Field(..., description="Event database ID")
+    event_name: str = Field(..., description="Event name")
+    sex: str = Field(..., description="Gender division filter applied")
+    summary_stats: SummaryStats = Field(..., description="Summary statistics (best scores)")
+    move_type_stats: List[MoveTypeStat] = Field(..., description="Move type statistics (sorted by best_score DESC)")
+    top_heat_scores: List[ScoreEntry] = Field(..., description="All heat scores (sorted DESC)")
+    top_jump_scores: List[JumpScoreEntry] = Field(..., description="All jump scores (sorted DESC)")
+    top_wave_scores: List[ScoreEntry] = Field(..., description="All wave scores (sorted DESC)")
+    metadata: EventStatsMetadata = Field(..., description="Metadata about the statistics")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "event_id": 123,
+                "event_name": "2025 Tenerife Grand Slam",
+                "sex": "Women",
+                "summary_stats": {
+                    "best_heat_score": {
+                        "score": 24.50,
+                        "athlete_name": "Degrieck",
+                        "athlete_id": "456",
+                        "heat_number": "21a"
+                    },
+                    "best_jump_score": {
+                        "score": 7.10,
+                        "athlete_name": "Ruano Moreno",
+                        "athlete_id": "789",
+                        "heat_number": "19a",
+                        "move_type": "Forward Loop"
+                    },
+                    "best_wave_score": {
+                        "score": 7.50,
+                        "athlete_name": "Degrieck",
+                        "athlete_id": "456",
+                        "heat_number": "21a"
+                    }
+                },
+                "move_type_stats": [
+                    {
+                        "move_type": "Wave",
+                        "best_score": 7.50,
+                        "average_score": 2.95,
+                        "best_scored_by": {
+                            "athlete_name": "Degrieck",
+                            "athlete_id": "456",
+                            "heat_number": "21a",
+                            "score": 7.50
+                        }
+                    }
+                ],
+                "top_heat_scores": [
+                    {
+                        "rank": 1,
+                        "athlete_name": "Degrieck",
+                        "athlete_id": "456",
+                        "score": 24.50,
+                        "heat_number": "21a"
+                    }
+                ],
+                "top_jump_scores": [
+                    {
+                        "rank": 1,
+                        "athlete_name": "Ruano Moreno",
+                        "athlete_id": "789",
+                        "score": 7.10,
+                        "move_type": "Forward Loop",
+                        "heat_number": "19a"
+                    }
+                ],
+                "top_wave_scores": [
+                    {
+                        "rank": 1,
+                        "athlete_name": "Degrieck",
+                        "athlete_id": "456",
+                        "score": 7.50,
+                        "heat_number": "21a"
+                    }
+                ],
+                "metadata": {
+                    "total_heats": 52,
+                    "total_athletes": 26,
+                    "generated_at": "2025-11-09T17:45:00Z"
+                }
+            }
+        }
+
+
+# ============================================================================
 # Error Models
 # ============================================================================
 
