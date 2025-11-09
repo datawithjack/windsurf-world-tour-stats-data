@@ -1,0 +1,43 @@
+[Unit]
+Description=Windsurf World Tour Stats API
+After=network.target
+
+[Service]
+Type=notify
+# User and group to run as (change 'ubuntu' to your user)
+User=ubuntu
+Group=ubuntu
+
+# Working directory
+WorkingDirectory=/opt/windsurf-api
+
+# Environment file (contains DB credentials and API settings)
+EnvironmentFile=/opt/windsurf-api/.env.production
+
+# Command to start the service
+ExecStart=/opt/windsurf-api/venv/bin/gunicorn \
+    -c /opt/windsurf-api/deployment/gunicorn.conf.py \
+    src.api.main:app
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/gunicorn /var/run/gunicorn
+
+# Process limits
+LimitNOFILE=65536
+LimitNPROC=512
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=windsurf-api
+
+[Install]
+WantedBy=multi-user.target

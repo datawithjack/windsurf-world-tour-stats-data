@@ -1,0 +1,21 @@
+# FastAPI & Web Framework Dependencies
+# Install these in addition to base requirements.txt for API functionality
+
+# FastAPI Framework
+fastapi>=0.109.0
+
+# ASGI Server
+uvicorn[standard]>=0.27.0
+
+# Data Validation & Settings
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Production WSGI Server (for deployment)
+gunicorn>=21.2.0
+
+# Database Driver
+mysql-connector-python>=8.0.33
+
+# Additional API utilities
+python-multipart>=0.0.6  # For file uploads if needed in future

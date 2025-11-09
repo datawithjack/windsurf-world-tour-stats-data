@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_athlete_id.py)",
+      "Bash(python src/scrapers/pwa_results_scraper.py)",
+      "Bash(cat \"c:\\Users\\jackf\\OneDrive\\Documents\\Projects\\Windsurf World Tour Stats\\data\\reports\\pwa_liveheats_matching_report_v2.csv\")",
+      "Bash(python:*)",
+      "Bash(timeout /t 30)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
