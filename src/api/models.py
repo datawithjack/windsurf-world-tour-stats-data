@@ -5,8 +5,8 @@ Defines response schemas for all API endpoints.
 """
 
 from datetime import date, datetime
-from typing import Optional, List
-from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List, Union
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 # ============================================================================
@@ -541,6 +541,60 @@ class EventStatsResponse(BaseModel):
                     "total_athletes": 26,
                     "generated_at": "2025-11-09T17:45:00Z"
                 }
+            }
+        }
+
+
+# ============================================================================
+# Site Stats Models
+# ============================================================================
+
+class SiteStat(BaseModel):
+    """
+    Site statistic model
+
+    Single statistic from SITE_STATS_VIEW containing a metric name and value.
+    """
+    metric: str = Field(..., description="Statistic name/metric key")
+    value: Union[str, int, float] = Field(..., description="Statistic value")
+
+    @field_validator('value', mode='before')
+    @classmethod
+    def convert_value_to_string(cls, v):
+        """Convert any value type to string for consistent API output"""
+        if v is None:
+            return ""
+        return str(v)
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "metric": "total_events",
+                "value": "118"
+            }
+        }
+
+
+class SiteStatsResponse(BaseModel):
+    """
+    Site statistics response
+
+    Contains all site-wide statistics from SITE_STATS_VIEW.
+    """
+    stats: List[SiteStat] = Field(..., description="List of site statistics")
+    generated_at: datetime = Field(..., description="Timestamp when stats were retrieved (ISO 8601)")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "stats": [
+                    {"metric": "total_events", "value": "118"},
+                    {"metric": "total_athletes", "value": "359"},
+                    {"metric": "total_results", "value": "2052"}
+                ],
+                "generated_at": "2025-11-10T10:30:00Z"
             }
         }
 
