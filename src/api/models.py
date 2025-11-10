@@ -51,10 +51,10 @@ class Event(BaseModel):
     # Media
     event_image_url: Optional[str] = Field(None, description="Event image URL")
 
-    # Timestamps
-    scraped_at: datetime = Field(..., description="When data was scraped")
-    created_at: Optional[datetime] = Field(None, description="Database record creation time")
-    updated_at: Optional[datetime] = Field(None, description="Database record last update time")
+    # Athlete Participation Counts (from EVENT_INFO_VIEW)
+    total_athletes: Optional[int] = Field(None, description="Total unique athletes who competed in event")
+    total_men: Optional[int] = Field(None, description="Total male athletes who competed")
+    total_women: Optional[int] = Field(None, description="Total female athletes who competed")
 
     class Config:
         from_attributes = True

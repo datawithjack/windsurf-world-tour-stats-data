@@ -96,7 +96,7 @@ async def list_events(
         # Count total items
         count_query = f"""
             SELECT COUNT(*) as total
-            FROM PWA_IWT_EVENTS
+            FROM EVENT_INFO_VIEW
             WHERE {where_clause}
         """
         total = db.execute_count(count_query, tuple(params))
@@ -119,13 +119,13 @@ async def list_events(
         # Query events
         query = f"""
             SELECT
-                id, source, scraped_at, year, event_id, event_name, event_url,
+                id, source, year, event_id, event_name, event_url,
                 event_date, start_date, end_date, day_window,
                 event_section, event_status, competition_state,
                 has_wave_discipline, all_disciplines,
                 country_flag, country_code, stars, event_image_url,
-                created_at, updated_at
-            FROM PWA_IWT_EVENTS
+                total_athletes, total_men, total_women
+            FROM EVENT_INFO_VIEW
             WHERE {where_clause}
             ORDER BY year DESC, start_date DESC, event_id DESC
             LIMIT %s OFFSET %s
@@ -183,13 +183,13 @@ async def get_event(
     try:
         query = """
             SELECT
-                id, source, scraped_at, year, event_id, event_name, event_url,
+                id, source, year, event_id, event_name, event_url,
                 event_date, start_date, end_date, day_window,
                 event_section, event_status, competition_state,
                 has_wave_discipline, all_disciplines,
                 country_flag, country_code, stars, event_image_url,
-                created_at, updated_at
-            FROM PWA_IWT_EVENTS
+                total_athletes, total_men, total_women
+            FROM EVENT_INFO_VIEW
             WHERE id = %s
         """
 
