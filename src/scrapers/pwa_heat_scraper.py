@@ -94,9 +94,12 @@ class PWAHeatScraper:
         self.log("Loading PWA division tracking data...")
         df = pd.read_csv(self.tracking_csv_path)
 
-        # Filter for divisions with results (2023+, has_results=True)
+        # Filter for divisions with results (2016+, has_results=True)
+        # Excluding 2020-2021 (COVID years with no published results)
         divisions_with_results = df[
-            (df['year'] >= 2023) &
+            (df['year'] >= 2016) &
+            (df['year'] != 2020) &
+            (df['year'] != 2021) &
             (df['has_results'] == True)
         ].copy()
 
