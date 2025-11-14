@@ -13,7 +13,11 @@ from ..database import DatabaseManager, get_db
 from ..models import (
     Event, EventsResponse, PaginationMeta,
     EventStatsResponse, SummaryStats, ScoreDetail, JumpScoreDetail,
-    MoveTypeStat, BestScoredBy, ScoreEntry, JumpScoreEntry, EventStatsMetadata
+    MoveTypeStat, BestScoredBy, ScoreEntry, JumpScoreEntry, EventStatsMetadata,
+    AthleteListResponse, AthleteListItem, AthleteListMetadata,
+    AthleteStatsResponse, AthleteProfile, AthleteSummaryStats,
+    BestHeatScore, BestJumpScore, BestWaveScore,
+    MoveTypeScore, HeatScore, JumpScore, WaveScore, AthleteStatsMetadata
 )
 from ..config import settings
 from datetime import datetime
@@ -448,4 +452,457 @@ async def get_event_stats(
         raise HTTPException(status_code=500, detail="Database query failed")
     except Exception as e:
         logger.error(f"Unexpected error in get_event_stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get(
+    "/{event_id}/athletes",
+    response_model=AthleteListResponse,
+    summary="List athletes in event",
+    description="Get list of all athletes who competed in a specific event for a specific division"
+)
+async def list_event_athletes(
+    event_id: int,
+    sex: str = Query("Women", description="Gender division filter ('Women' or 'Men')"),
+    db: DatabaseManager = Depends(get_db)
+):
+    """
+    Get list of athletes who competed in an event
+
+    Returns all athletes for a specific division (Men/Women) with basic stats:
+    - Final placement
+    - Total heats competed
+    - Best heat score
+
+    **Path Parameters:**
+    - `event_id`: Database primary key (id column from PWA_IWT_EVENTS)
+
+    **Query Parameters:**
+    - `sex`: Gender division ('Women' or 'Men', default: 'Women')
+
+    **Returns:**
+    - AthleteListResponse with athletes sorted by overall_position ascending
+
+    **Errors:**
+    - 400: Invalid sex parameter
+    - 404: Event not found
+    - 500: Database error
+    """
+
+    try:
+        # Validate sex parameter
+        if sex not in ["Women", "Men"]:
+            raise HTTPException(
+                status_code=400,
+                detail="sex must be 'Women' or 'Men'"
+            )
+
+        # 1. Verify event exists and get event name
+        event_query = """
+            SELECT id, event_name
+            FROM PWA_IWT_EVENTS
+            WHERE id = %s
+        """
+        event_result = db.execute_query(event_query, (event_id,), fetch_one=True)
+
+        if not event_result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Event with id {event_id} not found"
+            )
+
+        event_name = event_result['event_name']
+
+        # 2. Get list of athletes who competed in this event
+        athletes_query = """
+            SELECT
+                a.id as athlete_id,
+                a.primary_name as name,
+                a.nationality as country,
+                a.nationality as country_code,
+                CAST(r.place AS UNSIGNED) as overall_position,
+                COALESCE(a.pwa_sail_number, r.sail_number) as sail_number,
+                COALESCE(a.liveheats_image_url, a.pwa_profile_url) as profile_image,
+                COUNT(DISTINCT hr.heat_id) as total_heats,
+                ROUND(COALESCE(MAX(hr.result_total), 0), 2) as best_heat_score
+            FROM PWA_IWT_RESULTS r
+            JOIN PWA_IWT_EVENTS e ON r.source = e.source AND r.event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON r.source = asi.source AND r.athlete_id = asi.source_id
+            JOIN ATHLETES a ON asi.athlete_id = a.id
+            LEFT JOIN (
+                SELECT hr.*, asi2.athlete_id as unified_athlete_id
+                FROM PWA_IWT_HEAT_RESULTS hr
+                JOIN ATHLETE_SOURCE_IDS asi2 ON hr.source = asi2.source AND hr.athlete_id = asi2.source_id
+            ) hr ON hr.pwa_event_id = r.event_id AND hr.unified_athlete_id = a.id
+            WHERE e.id = %s AND r.sex = %s
+            GROUP BY a.id, a.primary_name, a.nationality, sail_number, profile_image, overall_position
+            ORDER BY overall_position ASC
+        """
+
+        athletes_results = db.execute_query(athletes_query, (event_id, sex))
+
+        # Convert to Pydantic models
+        athletes = []
+        if athletes_results:
+            for row in athletes_results:
+                athletes.append(AthleteListItem(
+                    athlete_id=row['athlete_id'],
+                    name=row['name'],
+                    country=row['country'] or 'Unknown',
+                    country_code=row['country_code'] or 'XX',
+                    overall_position=row['overall_position'],
+                    sail_number=row['sail_number'],
+                    profile_image=row['profile_image'],
+                    total_heats=row['total_heats'],
+                    best_heat_score=row['best_heat_score']
+                ))
+
+        # Build metadata
+        metadata = AthleteListMetadata(
+            total_athletes=len(athletes),
+            generated_at=datetime.utcnow()
+        )
+
+        return AthleteListResponse(
+            event_id=event_id,
+            event_name=event_name,
+            sex=sex,
+            athletes=athletes,
+            metadata=metadata
+        )
+
+    except HTTPException:
+        raise
+    except Error as e:
+        logger.error(f"Database error in list_event_athletes: {e}")
+        raise HTTPException(status_code=500, detail="Database query failed")
+    except Exception as e:
+        logger.error(f"Unexpected error in list_event_athletes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get(
+    "/{event_id}/athletes/{athlete_id}/stats",
+    response_model=AthleteStatsResponse,
+    summary="Get athlete statistics for event",
+    description="Get comprehensive statistics for a specific athlete in a specific event"
+)
+async def get_athlete_event_stats(
+    event_id: int,
+    athlete_id: int,
+    sex: str = Query(None, description="Gender division filter ('Women' or 'Men', optional - auto-detect)"),
+    db: DatabaseManager = Depends(get_db)
+):
+    """
+    Get detailed athlete statistics for an event
+
+    Returns comprehensive performance statistics including:
+    - Athlete profile
+    - Summary stats (best heat, jump, wave with opponents)
+    - Move type analysis (best/avg for each move)
+    - All heat scores with elimination type
+    - All jump scores (sorted desc)
+    - All wave scores (sorted desc)
+
+    **Path Parameters:**
+    - `event_id`: Database primary key (id column from PWA_IWT_EVENTS)
+    - `athlete_id`: Unified athlete ID (id from ATHLETES table)
+
+    **Query Parameters:**
+    - `sex`: Gender division ('Women' or 'Men', optional - will auto-detect if not provided)
+
+    **Returns:**
+    - AthleteStatsResponse with complete athlete statistics
+
+    **Errors:**
+    - 400: Invalid sex parameter or gender mismatch
+    - 404: Event not found or athlete didn't compete in event
+    - 500: Database error
+    """
+
+    try:
+        # Validate sex parameter if provided
+        if sex is not None and sex not in ["Women", "Men"]:
+            raise HTTPException(
+                status_code=400,
+                detail="sex must be 'Women' or 'Men'"
+            )
+
+        # 1. Verify event exists
+        event_query = """
+            SELECT id, event_name
+            FROM PWA_IWT_EVENTS
+            WHERE id = %s
+        """
+        event_result = db.execute_query(event_query, (event_id,), fetch_one=True)
+
+        if not event_result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Event with id {event_id} not found"
+            )
+
+        event_name = event_result['event_name']
+
+        # 2. Get athlete profile and result (auto-detect sex if not provided)
+        if sex is None:
+            # Auto-detect sex from results
+            profile_query = """
+                SELECT
+                    a.id as athlete_id,
+                    a.primary_name as name,
+                    a.nationality as country,
+                    a.nationality as country_code,
+                    COALESCE(a.liveheats_image_url, a.pwa_profile_url) as profile_image,
+                    a.pwa_sponsors as sponsors,
+                    COALESCE(a.pwa_sail_number, r.sail_number) as sail_number,
+                    CAST(r.place AS UNSIGNED) as overall_position,
+                    r.sex
+                FROM ATHLETES a
+                JOIN ATHLETE_SOURCE_IDS asi ON a.id = asi.athlete_id
+                JOIN PWA_IWT_RESULTS r ON r.source = asi.source AND r.athlete_id = asi.source_id
+                JOIN PWA_IWT_EVENTS e ON r.source = e.source AND r.event_id = e.event_id
+                WHERE a.id = %s AND e.id = %s
+                LIMIT 1
+            """
+            profile_result = db.execute_query(profile_query, (athlete_id, event_id), fetch_one=True)
+        else:
+            # Use provided sex
+            profile_query = """
+                SELECT
+                    a.id as athlete_id,
+                    a.primary_name as name,
+                    a.nationality as country,
+                    a.nationality as country_code,
+                    COALESCE(a.liveheats_image_url, a.pwa_profile_url) as profile_image,
+                    a.pwa_sponsors as sponsors,
+                    COALESCE(a.pwa_sail_number, r.sail_number) as sail_number,
+                    CAST(r.place AS UNSIGNED) as overall_position,
+                    r.sex
+                FROM ATHLETES a
+                JOIN ATHLETE_SOURCE_IDS asi ON a.id = asi.athlete_id
+                JOIN PWA_IWT_RESULTS r ON r.source = asi.source AND r.athlete_id = asi.source_id
+                JOIN PWA_IWT_EVENTS e ON r.source = e.source AND r.event_id = e.event_id
+                WHERE a.id = %s AND e.id = %s AND r.sex = %s
+                LIMIT 1
+            """
+            profile_result = db.execute_query(profile_query, (athlete_id, event_id, sex), fetch_one=True)
+
+        if not profile_result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Athlete {athlete_id} did not compete in event {event_id}" + (f" ({sex} division)" if sex else "")
+            )
+
+        # Extract sex from result
+        detected_sex = profile_result['sex']
+
+        # 3. Get best heat score with opponents
+        best_heat_query = """
+            SELECT
+                hr.heat_id as heat,
+                ROUND(hr.result_total, 2) as score,
+                GROUP_CONCAT(DISTINCT opp_hr.athlete_name ORDER BY opp_hr.athlete_name SEPARATOR ', ') as opponents_str
+            FROM PWA_IWT_HEAT_RESULTS hr
+            JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON hr.source = asi.source AND hr.athlete_id = asi.source_id
+            LEFT JOIN PWA_IWT_HEAT_RESULTS opp_hr
+                ON opp_hr.heat_id = hr.heat_id
+                AND opp_hr.athlete_id != hr.athlete_id
+            WHERE asi.athlete_id = %s AND e.id = %s
+            GROUP BY hr.heat_id, hr.result_total
+            ORDER BY hr.result_total DESC
+            LIMIT 1
+        """
+        best_heat_result = db.execute_query(best_heat_query, (athlete_id, event_id), fetch_one=True)
+
+        # 4. Get best jump score with opponents and move type
+        best_jump_query = """
+            SELECT
+                s.heat_id as heat,
+                ROUND(s.score, 2) as score,
+                s.type as move,
+                GROUP_CONCAT(DISTINCT opp_s.athlete_name ORDER BY opp_s.athlete_name SEPARATOR ', ') as opponents_str
+            FROM PWA_IWT_HEAT_SCORES s
+            JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
+            LEFT JOIN PWA_IWT_HEAT_SCORES opp_s
+                ON opp_s.heat_id = s.heat_id
+                AND opp_s.athlete_id != s.athlete_id
+            WHERE asi.athlete_id = %s AND e.id = %s AND s.type != 'Wave'
+            GROUP BY s.heat_id, s.score, s.type
+            ORDER BY s.score DESC
+            LIMIT 1
+        """
+        best_jump_result = db.execute_query(best_jump_query, (athlete_id, event_id), fetch_one=True)
+
+        # 5. Get best wave score with opponents
+        best_wave_query = """
+            SELECT
+                s.heat_id as heat,
+                ROUND(s.score, 2) as score,
+                GROUP_CONCAT(DISTINCT opp_s.athlete_name ORDER BY opp_s.athlete_name SEPARATOR ', ') as opponents_str
+            FROM PWA_IWT_HEAT_SCORES s
+            JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
+            LEFT JOIN PWA_IWT_HEAT_SCORES opp_s
+                ON opp_s.heat_id = s.heat_id
+                AND opp_s.athlete_id != s.athlete_id
+            WHERE asi.athlete_id = %s AND e.id = %s AND s.type = 'Wave'
+            GROUP BY s.heat_id, s.score
+            ORDER BY s.score DESC
+            LIMIT 1
+        """
+        best_wave_result = db.execute_query(best_wave_query, (athlete_id, event_id), fetch_one=True)
+
+        # 6. Get move type scores (jumps only, exclude Wave)
+        move_type_query = """
+            SELECT
+                s.type as move_type,
+                ROUND(MAX(s.score), 2) as best_score,
+                ROUND(AVG(s.score), 2) as average_score
+            FROM PWA_IWT_HEAT_SCORES s
+            JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
+            WHERE asi.athlete_id = %s AND e.id = %s AND s.type != 'Wave'
+            GROUP BY s.type
+            ORDER BY best_score DESC
+        """
+        move_type_results = db.execute_query(move_type_query, (athlete_id, event_id))
+
+        # 7. Get all heat scores with elimination type
+        heat_scores_query = """
+            SELECT
+                hr.heat_id as heat_number,
+                ROUND(hr.result_total, 2) as score,
+                CASE
+                    WHEN hp.elimination_name IS NULL OR hp.elimination_name = '' THEN NULL
+                    WHEN LOWER(hp.elimination_name) LIKE '%double elimination%' THEN 'Double'
+                    WHEN LOWER(hp.elimination_name) LIKE '%elimination%' THEN 'Single'
+                    ELSE NULL
+                END as elimination_type
+            FROM PWA_IWT_HEAT_RESULTS hr
+            JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON hr.source = asi.source AND hr.athlete_id = asi.source_id
+            LEFT JOIN PWA_IWT_HEAT_PROGRESSION hp ON hp.heat_id = hr.heat_id
+            WHERE asi.athlete_id = %s AND e.id = %s
+            ORDER BY hr.result_total DESC
+        """
+        heat_scores_results = db.execute_query(heat_scores_query, (athlete_id, event_id))
+
+        # 8. Get all jump scores
+        jump_scores_query = """
+            SELECT
+                s.heat_id as heat_number,
+                s.type as move,
+                ROUND(s.score, 2) as score,
+                COALESCE(s.counting, FALSE) as counting
+            FROM PWA_IWT_HEAT_SCORES s
+            JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
+            WHERE asi.athlete_id = %s AND e.id = %s AND s.type != 'Wave'
+            ORDER BY s.score DESC
+        """
+        jump_scores_results = db.execute_query(jump_scores_query, (athlete_id, event_id))
+
+        # 9. Get all wave scores
+        wave_scores_query = """
+            SELECT
+                s.heat_id as heat_number,
+                ROUND(s.score, 2) as score,
+                COALESCE(s.counting, FALSE) as counting
+            FROM PWA_IWT_HEAT_SCORES s
+            JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
+            JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
+            WHERE asi.athlete_id = %s AND e.id = %s AND s.type = 'Wave'
+            ORDER BY s.score DESC
+        """
+        wave_scores_results = db.execute_query(wave_scores_query, (athlete_id, event_id))
+
+        # Build response models
+        profile = AthleteProfile(
+            name=profile_result['name'],
+            country=profile_result['country'] or 'Unknown',
+            country_code=profile_result['country_code'] or 'XX',
+            profile_image=profile_result['profile_image'],
+            sponsors=profile_result['sponsors'],
+            sail_number=profile_result['sail_number']
+        )
+
+        # Parse opponents strings into lists
+        def parse_opponents(opponents_str):
+            if opponents_str:
+                return [name.strip() for name in opponents_str.split(',')]
+            return None
+
+        best_heat_score = BestHeatScore(
+            score=best_heat_result['score'],
+            heat=best_heat_result['heat'],
+            opponents=parse_opponents(best_heat_result.get('opponents_str'))
+        ) if best_heat_result else BestHeatScore(score=0.0, heat='', opponents=None)
+
+        best_jump_score = BestJumpScore(
+            score=best_jump_result['score'],
+            heat=best_jump_result['heat'],
+            move=best_jump_result['move'],
+            opponents=parse_opponents(best_jump_result.get('opponents_str'))
+        ) if best_jump_result else BestJumpScore(score=0.0, heat='', move='', opponents=None)
+
+        best_wave_score = BestWaveScore(
+            score=best_wave_result['score'],
+            heat=best_wave_result['heat'],
+            opponents=parse_opponents(best_wave_result.get('opponents_str'))
+        ) if best_wave_result else BestWaveScore(score=0.0, heat='', opponents=None)
+
+        summary_stats = AthleteSummaryStats(
+            overall_position=profile_result['overall_position'],
+            best_heat_score=best_heat_score,
+            best_jump_score=best_jump_score,
+            best_wave_score=best_wave_score
+        )
+
+        move_type_scores = [MoveTypeScore(**row) for row in move_type_results] if move_type_results else []
+        heat_scores = [HeatScore(**row) for row in heat_scores_results] if heat_scores_results else []
+
+        # Handle None values in counting field
+        jump_scores = []
+        if jump_scores_results:
+            for row in jump_scores_results:
+                row['counting'] = bool(row['counting']) if row['counting'] is not None else False
+                jump_scores.append(JumpScore(**row))
+
+        wave_scores = []
+        if wave_scores_results:
+            for row in wave_scores_results:
+                row['counting'] = bool(row['counting']) if row['counting'] is not None else False
+                wave_scores.append(WaveScore(**row))
+
+        metadata = AthleteStatsMetadata(
+            total_heats=len(heat_scores),
+            total_jumps=len(jump_scores),
+            total_waves=len(wave_scores),
+            generated_at=datetime.utcnow()
+        )
+
+        return AthleteStatsResponse(
+            event_id=event_id,
+            event_name=event_name,
+            sex=detected_sex,
+            athlete_id=athlete_id,
+            profile=profile,
+            summary_stats=summary_stats,
+            move_type_scores=move_type_scores,
+            heat_scores=heat_scores,
+            jump_scores=jump_scores,
+            wave_scores=wave_scores,
+            metadata=metadata
+        )
+
+    except HTTPException:
+        raise
+    except Error as e:
+        logger.error(f"Database error in get_athlete_event_stats: {e}")
+        raise HTTPException(status_code=500, detail="Database query failed")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_athlete_event_stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
