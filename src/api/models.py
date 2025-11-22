@@ -279,6 +279,322 @@ class AthleteResultsResponse(BaseModel):
 
 
 # ============================================================================
+# Athlete Event Stats Models (for Athlete Stats Tab)
+# ============================================================================
+
+class AthleteListItem(BaseModel):
+    """
+    Athlete summary for event athlete list
+
+    Used in dropdown selector for athlete stats tab.
+    """
+    athlete_id: int = Field(..., description="Unified athlete ID")
+    name: str = Field(..., description="Full athlete name")
+    country: str = Field(..., description="Country name")
+    country_code: str = Field(..., description="ISO 3166-1 alpha-2 country code")
+    overall_position: int = Field(..., description="Final placement in event (1 = winner)")
+    sail_number: Optional[str] = Field(None, description="Competition sail number")
+    profile_image: Optional[str] = Field(None, description="URL to athlete profile photo")
+    total_heats: int = Field(..., description="Number of heats competed in")
+    best_heat_score: float = Field(..., description="Highest single heat score")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "athlete_id": 456,
+                "name": "Sarah Degrieck",
+                "country": "Belgium",
+                "country_code": "BE",
+                "overall_position": 1,
+                "sail_number": "BEL-8",
+                "profile_image": "https://cdn.example.com/athletes/456.jpg",
+                "total_heats": 8,
+                "best_heat_score": 24.50
+            }
+        }
+
+
+class AthleteListMetadata(BaseModel):
+    """
+    Metadata for athlete list response
+    """
+    total_athletes: int = Field(..., description="Total number of athletes in response")
+    generated_at: datetime = Field(..., description="Timestamp when data was generated (ISO 8601)")
+
+    class Config:
+        from_attributes = True
+
+
+class AthleteListResponse(BaseModel):
+    """
+    Event athlete list response
+
+    Contains all athletes who competed in a specific event and division.
+    """
+    event_id: int = Field(..., description="Event database ID")
+    event_name: str = Field(..., description="Event name")
+    sex: str = Field(..., description="Gender division ('Women' or 'Men')")
+    athletes: List[AthleteListItem] = Field(..., description="List of athletes (sorted by overall_position)")
+    metadata: AthleteListMetadata = Field(..., description="Response metadata")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "event_id": 123,
+                "event_name": "2025 Tenerife Grand Slam",
+                "sex": "Women",
+                "athletes": [
+                    {
+                        "athlete_id": 456,
+                        "name": "Sarah Degrieck",
+                        "country": "Belgium",
+                        "country_code": "BE",
+                        "overall_position": 1,
+                        "sail_number": "BEL-8",
+                        "profile_image": "https://cdn.example.com/athletes/456.jpg",
+                        "total_heats": 8,
+                        "best_heat_score": 24.50
+                    }
+                ],
+                "metadata": {
+                    "total_athletes": 26,
+                    "generated_at": "2025-11-14T10:30:00Z"
+                }
+            }
+        }
+
+
+class AthleteProfile(BaseModel):
+    """
+    Athlete profile information for stats detail view
+    """
+    name: str = Field(..., description="Full athlete name")
+    country: str = Field(..., description="Country name")
+    country_code: str = Field(..., description="ISO 3166-1 alpha-2 country code")
+    profile_image: Optional[str] = Field(None, description="URL to athlete profile photo")
+    sponsors: Optional[str] = Field(None, description="Comma-separated list of sponsors")
+    sail_number: Optional[str] = Field(None, description="Competition sail number")
+
+    class Config:
+        from_attributes = True
+
+
+class BestHeatScore(BaseModel):
+    """
+    Best heat score with context
+    """
+    score: float = Field(..., description="Total heat score")
+    heat: str = Field(..., description="Heat identifier")
+    opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
+
+    class Config:
+        from_attributes = True
+
+
+class BestJumpScore(BaseModel):
+    """
+    Best jump score with context
+    """
+    score: float = Field(..., description="Jump score")
+    heat: str = Field(..., description="Heat identifier")
+    move: str = Field(..., description="Move type name")
+    opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
+
+    class Config:
+        from_attributes = True
+
+
+class BestWaveScore(BaseModel):
+    """
+    Best wave score with context
+    """
+    score: float = Field(..., description="Wave score")
+    heat: str = Field(..., description="Heat identifier")
+    opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
+
+    class Config:
+        from_attributes = True
+
+
+class AthleteSummaryStats(BaseModel):
+    """
+    Summary statistics for athlete in event
+    """
+    overall_position: int = Field(..., description="Final placement in event (1 = winner)")
+    best_heat_score: BestHeatScore = Field(..., description="Best overall heat score with context")
+    best_jump_score: BestJumpScore = Field(..., description="Best individual jump score with context")
+    best_wave_score: BestWaveScore = Field(..., description="Best individual wave score with context")
+
+    class Config:
+        from_attributes = True
+
+
+class MoveTypeScore(BaseModel):
+    """
+    Move type statistics
+    """
+    move_type: str = Field(..., description="Move type name (e.g., 'Forward Loop', 'Wave')")
+    best_score: float = Field(..., description="Best score achieved for this move type")
+    average_score: float = Field(..., description="Average score for this move type")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "move_type": "Forward Loop",
+                "best_score": 7.10,
+                "average_score": 5.65
+            }
+        }
+
+
+class HeatScore(BaseModel):
+    """
+    Heat score breakdown
+    """
+    heat_number: str = Field(..., description="Heat identifier (e.g., '19a', '23a')")
+    score: float = Field(..., description="Total heat score")
+    elimination_type: Optional[str] = Field(None, description="Either 'Single' or 'Double' (null if unknown)")
+
+    class Config:
+        from_attributes = True
+
+
+class JumpScore(BaseModel):
+    """
+    Individual jump score
+    """
+    heat_number: str = Field(..., description="Heat identifier where jump was performed")
+    move: str = Field(..., description="Move type performed")
+    score: float = Field(..., description="Individual jump score")
+    counting: bool = Field(..., description="Whether this score counted toward heat total")
+
+    class Config:
+        from_attributes = True
+
+
+class WaveScore(BaseModel):
+    """
+    Individual wave score
+    """
+    heat_number: str = Field(..., description="Heat identifier where wave was ridden")
+    score: float = Field(..., description="Individual wave score")
+    counting: bool = Field(..., description="Whether this score counted toward heat total")
+    wave_index: Optional[int] = Field(None, description="Wave index number (optional)")
+
+    class Config:
+        from_attributes = True
+
+
+class AthleteStatsMetadata(BaseModel):
+    """
+    Metadata for athlete stats response
+    """
+    total_heats: int = Field(..., description="Total number of heats competed in")
+    total_jumps: int = Field(..., description="Total number of jump attempts")
+    total_waves: int = Field(..., description="Total number of wave attempts")
+    generated_at: datetime = Field(..., description="Timestamp when data was generated (ISO 8601)")
+
+    class Config:
+        from_attributes = True
+
+
+class AthleteStatsResponse(BaseModel):
+    """
+    Detailed athlete statistics for event
+
+    Complete performance statistics for a specific athlete in a specific event.
+    """
+    event_id: int = Field(..., description="Event database ID")
+    event_name: str = Field(..., description="Event name")
+    sex: str = Field(..., description="Gender division ('Women' or 'Men')")
+    athlete_id: int = Field(..., description="Unified athlete ID")
+    profile: AthleteProfile = Field(..., description="Athlete profile information")
+    summary_stats: AthleteSummaryStats = Field(..., description="Summary statistics with best scores")
+    move_type_scores: List[MoveTypeScore] = Field(..., description="Move type analysis (sorted by best_score DESC)")
+    heat_scores: List[HeatScore] = Field(..., description="All heat scores (sorted by score DESC)")
+    jump_scores: List[JumpScore] = Field(..., description="All jump scores (sorted by score DESC)")
+    wave_scores: List[WaveScore] = Field(..., description="All wave scores (sorted by score DESC)")
+    metadata: AthleteStatsMetadata = Field(..., description="Response metadata")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "event_id": 123,
+                "event_name": "2025 Tenerife Grand Slam",
+                "sex": "Women",
+                "athlete_id": 456,
+                "profile": {
+                    "name": "Daida Ruano Moreno",
+                    "country": "Spain",
+                    "country_code": "ES",
+                    "profile_image": "https://cdn.example.com/athletes/456.jpg",
+                    "sponsors": "Bruch Boards, Severne Windsurfing, Maui Ultra Fins",
+                    "sail_number": "E-64"
+                },
+                "summary_stats": {
+                    "overall_position": 1,
+                    "best_heat_score": {
+                        "score": 23.58,
+                        "heat": "23a",
+                        "opponents": ["Kiefer Quintana", "Degrieck", "Offringa"]
+                    },
+                    "best_jump_score": {
+                        "score": 7.10,
+                        "heat": "19a",
+                        "move": "Forward Loop",
+                        "opponents": ["Katz", "Morales Navarro", "Wermeister"]
+                    },
+                    "best_wave_score": {
+                        "score": 6.75,
+                        "heat": "23a",
+                        "opponents": ["Kiefer Quintana", "Degrieck", "Offringa"]
+                    }
+                },
+                "move_type_scores": [
+                    {
+                        "move_type": "Forward Loop",
+                        "best_score": 7.10,
+                        "average_score": 5.65
+                    }
+                ],
+                "heat_scores": [
+                    {
+                        "heat_number": "23a",
+                        "score": 23.58,
+                        "elimination_type": "Single"
+                    }
+                ],
+                "jump_scores": [
+                    {
+                        "heat_number": "19a",
+                        "move": "Forward Loop",
+                        "score": 7.10,
+                        "counting": True
+                    }
+                ],
+                "wave_scores": [
+                    {
+                        "heat_number": "23a",
+                        "score": 6.75,
+                        "counting": True,
+                        "wave_index": 1014
+                    }
+                ],
+                "metadata": {
+                    "total_heats": 5,
+                    "total_jumps": 9,
+                    "total_waves": 8,
+                    "generated_at": "2025-11-14T11:15:00Z"
+                }
+            }
+        }
+
+
+# ============================================================================
 # Event Stats Models
 # ============================================================================
 
