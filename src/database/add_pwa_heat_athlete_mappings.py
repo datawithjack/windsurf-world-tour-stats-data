@@ -5,14 +5,22 @@ This script matches composite athlete_ids from PWA_IWT_HEAT_SCORES
 (format: "SURNAME_SAILNUMBER") to unified athlete profiles in ATHLETES table.
 New entries are added to ATHLETE_SOURCE_IDS to enable EVENT_STATS_VIEW joins.
 
-Two-Stage Matching Strategy:
-1. Exact Match: Construct composite IDs from ATHLETES.pwa_name + pwa_sail_number
+Three-Stage Matching Strategy:
+
+1. Exact Composite Match: Construct IDs from ATHLETES.pwa_name + pwa_sail_number
    - Extract surname (last word) from pwa_name
    - Combine with pwa_sail_number: "{surname}_{sail_number}"
    - Match exactly to PWA heat composite IDs
+   - Example: "Warchol_POL-111" matches "Warchol_POL-111" (100%)
 
-2. Fuzzy Match (fallback): For athletes without PWA data or no exact match
-   - Fuzzy match athlete names to unified ATHLETES table
+1.5. Sail Number + Fuzzy Surname: Handle spelling variations
+   - Match exact sail number (e.g., "POL-1111")
+   - Fuzzy match surnames (e.g., "Sniady" vs "Snaidy")
+   - Auto-match if surname fuzzy score >= 80%
+   - Example: "Sniady_POL-1111" matches "Snaidy_POL-1111" (83% surname match)
+
+2. General Fuzzy Match (fallback): For athletes without PWA data
+   - Fuzzy match full athlete names to unified ATHLETES table
    - Auto-match with >= 80% confidence
    - Flag < 80% for manual review
 
@@ -176,6 +184,69 @@ def create_athlete_lookup(athletes_df):
 
     return lookup
 
+def find_match_by_sail_and_surname(composite_id, sail_number, athletes_df, threshold=80):
+    """
+    Match by exact sail number + fuzzy surname matching.
+
+    Catches spelling variations like Sniady/Snaidy where sail number matches
+    but surname spelling differs slightly.
+
+    Args:
+        composite_id: "SURNAME_SAILNUMBER" format from heat scores
+        sail_number: Sail number from heat scores
+        athletes_df: DataFrame of ATHLETES table
+        threshold: Minimum fuzzy match score for surname (default 80)
+
+    Returns:
+        Dict with match results or None if no match
+    """
+    # Extract surname from composite ID (before underscore)
+    if '_' not in composite_id:
+        return None
+
+    heat_surname = composite_id.split('_')[0]
+
+    # Filter athletes with exact matching sail number
+    matching_sail = athletes_df[athletes_df['pwa_sail_number'] == sail_number].copy()
+
+    if len(matching_sail) == 0:
+        return None
+
+    best_match_id = None
+    best_matched_name = None
+    best_score = 0
+
+    # For each athlete with matching sail number, fuzzy match surnames
+    for _, athlete in matching_sail.iterrows():
+        if pd.isna(athlete['pwa_name']):
+            continue
+
+        # Extract surname from pwa_name (last word)
+        name_parts = str(athlete['pwa_name']).strip().split()
+        if not name_parts:
+            continue
+
+        athlete_surname = name_parts[-1]
+
+        # Fuzzy match the surnames
+        score = fuzz.ratio(normalize_name(heat_surname), normalize_name(athlete_surname))
+
+        if score > best_score:
+            best_score = score
+            best_match_id = athlete['athlete_id']
+            best_matched_name = athlete['pwa_name']
+
+    # Only return if score meets threshold
+    if best_score >= threshold:
+        return {
+            'athlete_id': best_match_id,
+            'matched_name': best_matched_name,
+            'match_score': best_score,
+            'match_method': 'sail_fuzzy_surname'
+        }
+
+    return None
+
 def find_best_match(composite_id, athlete_name, sail_number, athletes_df):
     """
     Match composite ID to unified athlete using fuzzy name matching.
@@ -232,8 +303,9 @@ def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_loo
     """
     Match all PWA heat athletes to unified athletes.
 
-    Uses two-stage matching:
+    Uses three-stage matching:
     1. Exact match on constructed composite ID (surname_sailnumber)
+    1.5. Sail number match + fuzzy surname (for spelling variations)
     2. Fuzzy name matching (fallback)
 
     Args:
@@ -247,10 +319,12 @@ def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_loo
     """
     print(f"\nMatching PWA heat athletes to unified athletes...")
     print(f"  Stage 1: Exact composite ID match")
+    print(f"  Stage 1.5: Sail number + fuzzy surname match")
     print(f"  Stage 2: Fuzzy name match (threshold={threshold}%)")
 
     matches = []
     exact_matches = 0
+    sail_fuzzy_matches = 0
     fuzzy_matches = 0
 
     for idx, row in heat_athletes_df.iterrows():
@@ -269,10 +343,16 @@ def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_loo
             }
             exact_matches += 1
         else:
-            # Stage 2: Fall back to fuzzy matching
-            match = find_best_match(composite_id, athlete_name, sail_number, unified_athletes_df)
-            if match['match_score'] >= threshold:
-                fuzzy_matches += 1
+            # Stage 1.5: Try sail number + fuzzy surname match
+            match = find_match_by_sail_and_surname(composite_id, sail_number, unified_athletes_df, threshold=80)
+
+            if match and match['match_score'] >= 80:
+                sail_fuzzy_matches += 1
+            else:
+                # Stage 2: Fall back to general fuzzy matching
+                match = find_best_match(composite_id, athlete_name, sail_number, unified_athletes_df)
+                if match['match_score'] >= threshold:
+                    fuzzy_matches += 1
 
         # Determine match status
         if match['match_score'] >= threshold:
@@ -302,7 +382,8 @@ def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_loo
 
     print(f"  [OK] Matching complete:")
     print(f"    - Exact composite matches: {exact_matches}")
-    print(f"    - Fuzzy matches (>={threshold}%): {fuzzy_matches}")
+    print(f"    - Sail + fuzzy surname matches: {sail_fuzzy_matches}")
+    print(f"    - General fuzzy matches (>={threshold}%): {fuzzy_matches}")
     print(f"    - Total auto-matched: {auto_matched}")
     print(f"    - Needs review (<{threshold}%): {needs_review}")
     print(f"    - No match: {no_match}")
