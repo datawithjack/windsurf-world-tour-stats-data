@@ -321,7 +321,7 @@ def create_event_stats_view(cursor):
         s.id AS score_id,
         s.heat_id,
         s.athlete_id,
-        s.athlete_name,
+        a.primary_name AS athlete_name,
         s.sail_number,
         COALESCE(NULLIF(s.sex, ''), hp.sex) AS sex,
         s.pwa_division_code AS division_code,
@@ -348,14 +348,23 @@ def create_event_stats_view(cursor):
         ON s.pwa_event_id = e.event_id
         AND s.source = e.source
 
-    -- Join to heat progression for sex (match on event + division)
+    -- Join to athlete source IDs to get unified athlete ID
+    LEFT JOIN ATHLETE_SOURCE_IDS asi
+        ON s.source = asi.source
+        AND s.athlete_id = asi.source_id
+
+    -- Join to unified athlete profile for primary name
+    LEFT JOIN ATHLETES a
+        ON asi.athlete_id = a.id
+
+    -- Join to heat progression for sex (match on heat_id for precision)
     LEFT JOIN (
-        SELECT DISTINCT pwa_event_id, pwa_division_code, sex, source
+        SELECT DISTINCT heat_id, pwa_event_id, pwa_division_code, sex, source
         FROM PWA_IWT_HEAT_PROGRESSION
     ) hp
         ON s.source = hp.source
         AND s.pwa_event_id = hp.pwa_event_id
-        AND s.pwa_division_code = hp.pwa_division_code
+        AND s.heat_id = hp.heat_id
 
     -- Join to score types for move names
     LEFT JOIN SCORE_TYPES st
