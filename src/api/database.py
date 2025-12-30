@@ -6,6 +6,8 @@ Works with both local development (SSH tunnel) and production (direct connection
 """
 
 import logging
+import time
+from functools import wraps
 from typing import Generator, Optional
 from contextlib import contextmanager
 import mysql.connector
@@ -15,6 +17,45 @@ from mysql.connector.pooling import MySQLConnectionPool
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def retry_on_db_error(max_attempts=3, base_delay=0.5):
+    """
+    Retry decorator for database operations with exponential backoff
+
+    Args:
+        max_attempts: Maximum retry attempts (default: 3)
+        base_delay: Base delay in seconds (default: 0.5s)
+
+    Exponential backoff: 0.5s, 1s, 2s
+    Retries only on connection errors, not logic errors
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Error as e:
+                    last_exception = e
+
+                    if attempt < max_attempts - 1:
+                        delay = base_delay * (2 ** attempt)
+                        logger.warning(
+                            f"Database error on attempt {attempt + 1}/{max_attempts}: {e}. "
+                            f"Retrying in {delay}s..."
+                        )
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"Database error after {max_attempts} attempts: {e}")
+                        raise
+
+            raise last_exception
+
+        return wrapper
+    return decorator
 
 
 class DatabaseManager:
@@ -42,15 +83,15 @@ class DatabaseManager:
             return
 
         try:
-            db_config = settings.get_db_config()
+            conn_config, pool_config = settings.get_db_config()
 
-            # Create connection pool
-            self._pool = mysql.connector.pooling.MySQLConnectionPool(
-                pool_name=settings.DB_POOL_NAME,
-                pool_size=settings.DB_POOL_SIZE,
-                pool_reset_session=settings.DB_POOL_RESET_SESSION,
-                **db_config
-            )
+            # Create connection pool with both connection and pool settings
+            pool_args = {
+                **pool_config,
+                **conn_config
+            }
+
+            self._pool = mysql.connector.pooling.MySQLConnectionPool(**pool_args)
 
             # Mark as initialized BEFORE testing connection to avoid recursion
             self._pool_initialized = True
@@ -79,9 +120,12 @@ class DatabaseManager:
             raise
 
     @contextmanager
+    @retry_on_db_error(max_attempts=3, base_delay=0.5)
     def get_connection(self):
         """
-        Get a connection from the pool (context manager)
+        Get a connection from the pool (context manager) with automatic retry
+
+        Retries up to 3 times with exponential backoff on connection errors.
 
         Usage:
             with db_manager.get_connection() as conn:
@@ -93,7 +137,7 @@ class DatabaseManager:
             mysql.connector.connection: Database connection
 
         Raises:
-            Error: If connection cannot be established
+            Error: If connection cannot be established after retries
         """
         # Initialize pool on first use
         if not self._pool_initialized:

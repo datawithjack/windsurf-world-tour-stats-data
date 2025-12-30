@@ -20,7 +20,7 @@ worker_class = "uvicorn.workers.UvicornWorker"  # Use Uvicorn workers for ASGI
 worker_connections = 1000  # Maximum simultaneous clients per worker
 max_requests = 1000  # Restart workers after this many requests (prevents memory leaks)
 max_requests_jitter = 50  # Add randomness to max_requests
-timeout = 60  # Workers silent for more than this many seconds are killed
+timeout = 120  # Workers silent for more than this many seconds are killed (increased from 60 to handle complex queries)
 keepalive = 5  # Seconds to wait for requests on a Keep-Alive connection
 
 # Logging

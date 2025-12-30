@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     DB_POOL_NAME: str = "windsurf_pool"
     DB_POOL_SIZE: int = 2  # Reduced for local dev (SSH tunnel can be slow)
     DB_POOL_RESET_SESSION: bool = True
+    DB_POOL_TIMEOUT: int = 30       # Seconds to wait for pool connection (prevents infinite hangs)
+    DB_POOL_RECYCLE: int = 3600     # Recycle connections after 1 hour (prevents stale connections)
+    DB_POOL_PRE_PING: bool = True   # Validate connection before use (detects stale connections)
 
     # Logging
     LOG_LEVEL: str = "info"
@@ -82,14 +85,15 @@ class Settings(BaseSettings):
         """
         return f"mysql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
-    def get_db_config(self) -> dict:
+    def get_db_config(self) -> tuple[dict, dict]:
         """
-        Get database configuration dictionary for mysql.connector
+        Get database configuration dictionaries for mysql.connector
 
         Returns:
-            dict: Database connection parameters
+            tuple[dict, dict]: (connection parameters, pool parameters)
         """
-        return {
+        # Connection parameters
+        conn_config = {
             "host": self.DB_HOST,
             "port": self.DB_PORT,
             "database": self.DB_NAME,
@@ -98,6 +102,15 @@ class Settings(BaseSettings):
             "connect_timeout": 10,  # 10 seconds is enough for SSH tunnel
             "autocommit": True
         }
+
+        # Pool-specific parameters
+        pool_config = {
+            "pool_name": self.DB_POOL_NAME,
+            "pool_size": self.DB_POOL_SIZE,
+            "pool_reset_session": self.DB_POOL_RESET_SESSION,
+        }
+
+        return conn_config, pool_config
 
 
 # Global settings instance
