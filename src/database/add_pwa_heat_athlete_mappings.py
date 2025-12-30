@@ -2,16 +2,21 @@
 Add PWA Heat Composite Athlete IDs to ATHLETE_SOURCE_IDS table.
 
 This script matches composite athlete_ids from PWA_IWT_HEAT_SCORES
-(format: "SURNAME_SAILNUMBER") to unified athlete profiles in ATHLETES table
-using fuzzy name matching. New entries are added to ATHLETE_SOURCE_IDS to enable
-EVENT_STATS_VIEW joins.
+(format: "SURNAME_SAILNUMBER") to unified athlete profiles in ATHLETES table.
+New entries are added to ATHLETE_SOURCE_IDS to enable EVENT_STATS_VIEW joins.
 
-Matching Strategy:
-- Extract unique composite IDs from PWA heat scores
-- Fuzzy match athlete names to unified ATHLETES table
-- Auto-match with >= 80% confidence (suitable for surname-only matching)
-- Flag < 80% for manual review
-- Insert matches into ATHLETE_SOURCE_IDS
+Two-Stage Matching Strategy:
+1. Exact Match: Construct composite IDs from ATHLETES.pwa_name + pwa_sail_number
+   - Extract surname (last word) from pwa_name
+   - Combine with pwa_sail_number: "{surname}_{sail_number}"
+   - Match exactly to PWA heat composite IDs
+
+2. Fuzzy Match (fallback): For athletes without PWA data or no exact match
+   - Fuzzy match athlete names to unified ATHLETES table
+   - Auto-match with >= 80% confidence
+   - Flag < 80% for manual review
+
+Result: Maximizes automatic matching while maintaining high accuracy
 """
 
 import mysql.connector
@@ -84,13 +89,13 @@ def get_pwa_heat_athletes(cursor):
 
 def get_unified_athletes(cursor):
     """
-    Query unified ATHLETES table.
+    Query unified ATHLETES table with PWA data.
 
     Args:
         cursor: Database cursor
 
     Returns:
-        DataFrame with athlete_id, primary_name, pwa_name
+        DataFrame with athlete_id, primary_name, pwa_name, pwa_sail_number
     """
     print("\nQuerying unified ATHLETES table...")
 
@@ -98,7 +103,8 @@ def get_unified_athletes(cursor):
         SELECT
             id AS athlete_id,
             primary_name,
-            pwa_name
+            pwa_name,
+            pwa_sail_number
         FROM ATHLETES
         ORDER BY primary_name
     """
@@ -106,10 +112,69 @@ def get_unified_athletes(cursor):
     cursor.execute(query)
     results = cursor.fetchall()
 
-    df = pd.DataFrame(results, columns=['athlete_id', 'primary_name', 'pwa_name'])
+    df = pd.DataFrame(results, columns=['athlete_id', 'primary_name', 'pwa_name', 'pwa_sail_number'])
     print(f"  [OK] Found {len(df)} unified athletes")
 
     return df
+
+def construct_composite_id(pwa_name, pwa_sail_number):
+    """
+    Construct composite athlete_id in same format as PWA heat data.
+
+    Format: "{surname}_{sail_number}"
+
+    Args:
+        pwa_name: Full PWA athlete name (e.g., "Adam Warchol")
+        pwa_sail_number: PWA sail number (e.g., "POL-111")
+
+    Returns:
+        Composite ID string or None if data missing
+    """
+    if pd.isna(pwa_name) or pd.isna(pwa_sail_number):
+        return None
+
+    # Extract surname (last word)
+    name_parts = str(pwa_name).strip().split()
+    if not name_parts:
+        return None
+
+    surname = name_parts[-1]
+
+    # Construct composite ID
+    composite_id = f"{surname}_{pwa_sail_number}"
+
+    return composite_id
+
+def create_athlete_lookup(athletes_df):
+    """
+    Create lookup dictionary mapping composite IDs to athlete IDs.
+
+    Args:
+        athletes_df: DataFrame of ATHLETES table
+
+    Returns:
+        Dict mapping composite_id -> (athlete_id, matched_name, match_method)
+    """
+    print("\nBuilding composite ID lookup from ATHLETES table...")
+
+    lookup = {}
+    constructed_count = 0
+
+    for _, athlete in athletes_df.iterrows():
+        # Construct composite ID from PWA data
+        composite_id = construct_composite_id(athlete['pwa_name'], athlete['pwa_sail_number'])
+
+        if composite_id:
+            lookup[composite_id] = (
+                athlete['athlete_id'],
+                athlete['pwa_name'],
+                'exact_composite'
+            )
+            constructed_count += 1
+
+    print(f"  [OK] Built lookup for {constructed_count} athletes with PWA data")
+
+    return lookup
 
 def find_best_match(composite_id, athlete_name, sail_number, athletes_df):
     """
@@ -163,29 +228,51 @@ def find_best_match(composite_id, athlete_name, sail_number, athletes_df):
         'match_method': best_method
     }
 
-def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, threshold=80):
+def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_lookup, threshold=80):
     """
     Match all PWA heat athletes to unified athletes.
+
+    Uses two-stage matching:
+    1. Exact match on constructed composite ID (surname_sailnumber)
+    2. Fuzzy name matching (fallback)
 
     Args:
         heat_athletes_df: DataFrame of PWA heat athletes
         unified_athletes_df: DataFrame of unified ATHLETES
-        threshold: Auto-match threshold (default 80, suitable for surname-only matching)
+        composite_lookup: Dict mapping composite_id -> (athlete_id, name, method)
+        threshold: Auto-match threshold for fuzzy matching (default 80)
 
     Returns:
         DataFrame with matching results
     """
-    print(f"\nMatching PWA heat athletes to unified athletes (threshold={threshold}%)...")
+    print(f"\nMatching PWA heat athletes to unified athletes...")
+    print(f"  Stage 1: Exact composite ID match")
+    print(f"  Stage 2: Fuzzy name match (threshold={threshold}%)")
 
     matches = []
+    exact_matches = 0
+    fuzzy_matches = 0
 
     for idx, row in heat_athletes_df.iterrows():
         composite_id = row['composite_id']
         athlete_name = row['athlete_name']
         sail_number = row['sail_number']
 
-        # Find best match
-        match = find_best_match(composite_id, athlete_name, sail_number, unified_athletes_df)
+        # Stage 1: Try exact composite ID match
+        if composite_id in composite_lookup:
+            athlete_id, matched_name, match_method = composite_lookup[composite_id]
+            match = {
+                'athlete_id': athlete_id,
+                'matched_name': matched_name,
+                'match_score': 100,
+                'match_method': match_method
+            }
+            exact_matches += 1
+        else:
+            # Stage 2: Fall back to fuzzy matching
+            match = find_best_match(composite_id, athlete_name, sail_number, unified_athletes_df)
+            if match['match_score'] >= threshold:
+                fuzzy_matches += 1
 
         # Determine match status
         if match['match_score'] >= threshold:
@@ -214,7 +301,9 @@ def match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, threshold=80)
     no_match = len(matches_df[matches_df['match_status'] == 'no_match'])
 
     print(f"  [OK] Matching complete:")
-    print(f"    - Auto-matched (>={threshold}%): {auto_matched}")
+    print(f"    - Exact composite matches: {exact_matches}")
+    print(f"    - Fuzzy matches (>={threshold}%): {fuzzy_matches}")
+    print(f"    - Total auto-matched: {auto_matched}")
     print(f"    - Needs review (<{threshold}%): {needs_review}")
     print(f"    - No match: {no_match}")
 
@@ -389,13 +478,16 @@ def main(dry_run=False):
         # Step 2: Get unified athletes
         unified_athletes_df = get_unified_athletes(cursor)
 
-        # Step 3: Match athletes (threshold=80 for surname-only matching)
-        matches_df = match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, threshold=80)
+        # Step 3: Build composite ID lookup
+        composite_lookup = create_athlete_lookup(unified_athletes_df)
 
-        # Step 4: Save matching report
+        # Step 4: Match athletes (exact composite match + fuzzy fallback)
+        matches_df = match_pwa_heat_athletes(heat_athletes_df, unified_athletes_df, composite_lookup, threshold=80)
+
+        # Step 5: Save matching report
         save_matching_report(matches_df)
 
-        # Step 5: Insert mappings (or show dry run)
+        # Step 6: Insert mappings (or show dry run)
         rows_inserted = insert_mappings_to_db(cursor, matches_df, dry_run=dry_run)
 
         if not dry_run:
@@ -403,7 +495,7 @@ def main(dry_run=False):
             conn.commit()
             print("\n[OK] Database changes committed")
 
-            # Step 6: Verify mappings
+            # Step 7: Verify mappings
             verify_mappings(cursor)
 
         # Print final summary
