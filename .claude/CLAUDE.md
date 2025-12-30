@@ -5,7 +5,7 @@ Building a comprehensive database and web application for professional windsurf 
 
 **Goal**: Scrape, clean, store, and display historical windsurf wave event data (4-5 star competitions) with unified athlete profiles.
 
-**Status**: All PWA and LiveHeats data successfully scraped, merged, and loaded into unified database with complete heat-level detail. Athlete matching system complete with 359 unified athletes. FastAPI serving data via production HTTPS endpoint.
+**Status**: All PWA and LiveHeats data successfully scraped, merged, and loaded into unified database with complete heat-level detail. Athlete matching system complete with 359 unified athletes. FastAPI serving data via production HTTPS endpoint with optimized connection pooling and reliability improvements (Dec 2025).
 
 ---
 
@@ -160,6 +160,44 @@ ssh -L 3306:10.0.151.92:3306 -i ~/.ssh/ssh-key-2025-08-30.key ubuntu@129.151.153
 uvicorn src.api.main:app --reload --port 8001
 
 # Access at http://localhost:8001/docs
+```
+
+### Production Configuration (Updated Dec 2025)
+
+**Deployment Location**: `/opt/windsurf-api` on Oracle Cloud VM
+
+**Connection Pool Settings** (Optimized for reliability):
+- **Pool Size**: 20 connections (increased from 5)
+- **Pool Timeout**: 30 seconds (prevents infinite hangs)
+- **Pool Recycle**: 3600 seconds (1 hour - prevents stale connections)
+- **Pool Pre-Ping**: Enabled (validates connections before use)
+
+**Gunicorn Configuration**:
+- **Workers**: 5 (calculated as `2 x CPU cores + 1`)
+- **Timeout**: 120 seconds (increased from 60s for complex queries)
+- **Worker Class**: `uvicorn.workers.UvicornWorker`
+
+**Reliability Features**:
+- **Automatic retry logic**: 3 attempts with exponential backoff (0.5s, 1s, 2s)
+- **Connection validation**: Pre-ping checks prevent stale connection errors
+- **Connection recycling**: Hourly refresh prevents MySQL timeout issues
+- **Increased timeout**: Handles complex multi-query endpoints without worker kills
+
+**Environment Variables** (`.env.production`):
+```bash
+DB_POOL_SIZE=20
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=3600
+DB_POOL_PRE_PING=true
+```
+
+**Deployment Method**: Git-based deployment from https://github.com/datawithjack/windsurf-world-tour-stats-data.git
+
+**Update Process**:
+```bash
+cd /opt/windsurf-api
+git pull origin main
+sudo systemctl restart windsurf-api
 ```
 
 ---

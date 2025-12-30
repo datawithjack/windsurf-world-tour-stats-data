@@ -2,9 +2,9 @@
 
 Complete guide for deploying the FastAPI application with HTTPS to Oracle Cloud VM.
 
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-12-30
 **Production URL**: https://windsurf-world-tour-stats-api.duckdns.org
-**Status**: ✅ Live and operational
+**Status**: ✅ Live and operational (Reliability improvements deployed Dec 2025)
 
 ---
 
@@ -57,12 +57,13 @@ curl https://windsurf-world-tour-stats-api.duckdns.org/health
 
 ### Production Stack
 - **FastAPI**: Python web framework
-- **Gunicorn**: WSGI server with Uvicorn workers (5 workers)
+- **Gunicorn**: WSGI server with Uvicorn workers (5 workers, 120s timeout)
 - **Nginx**: Reverse proxy (handles HTTPS, rate limiting)
 - **Let's Encrypt**: Free SSL certificates (auto-renewal)
 - **DuckDNS**: Free subdomain service
 - **Systemd**: Service management (auto-restart, logging)
 - **MySQL Heatwave**: Database (Oracle Cloud, 10.0.151.92:3306)
+  - **Connection Pool**: 20 connections with retry logic and auto-recycle
 - **Python 3.8**: Runtime environment
 
 ### Network Flow
@@ -153,10 +154,13 @@ DB_NAME=jfa_heatwave_db
 DB_USER=admin
 DB_PASSWORD=YOUR_PASSWORD_HERE
 
-# Database Pool Settings
+# Database Pool Settings (Optimized Dec 2025)
 DB_POOL_NAME=windsurf_pool
-DB_POOL_SIZE=5
+DB_POOL_SIZE=20
 DB_POOL_RESET_SESSION=true
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=3600
+DB_POOL_PRE_PING=true
 
 # Logging
 LOG_LEVEL=info

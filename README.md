@@ -6,6 +6,8 @@ A comprehensive database and API for professional windsurf wave event results fr
 
 **Phase 5 COMPLETE** - Production API deployed at https://windsurf-world-tour-stats-api.duckdns.org
 
+**Latest Update (Dec 2025)**: API reliability improvements - optimized connection pooling, automatic retry logic, and increased timeouts for better performance and stability.
+
 ### Current Coverage
 - **7,869 total records** across all tables
 - **55 wave events** from 2016-2025
