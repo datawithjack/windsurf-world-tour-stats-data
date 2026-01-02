@@ -648,7 +648,7 @@ class BestScoredBy(BaseModel):
 
     Used in MoveTypeStat to indicate the athlete who achieved the best score.
     """
-    athlete_name: str = Field(..., description="Athlete name")
+    athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[str] = Field(None, description="Athlete ID")
     heat_number: str = Field(..., description="Heat number/identifier")
     score: float = Field(..., description="Score value")
@@ -692,7 +692,7 @@ class ScoreEntry(BaseModel):
     Single entry in the top scores tables with rank.
     """
     rank: int = Field(..., description="Rank position (sequential, starting at 1)")
-    athlete_name: str = Field(..., description="Athlete name")
+    athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[str] = Field(None, description="Athlete ID")
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
     heat_number: str = Field(..., description="Heat number/identifier")
