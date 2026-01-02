@@ -34,7 +34,17 @@ app = FastAPI(
     description=settings.API_DESCRIPTION,
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    servers=[
+        {
+            "url": "https://windsurf-world-tour-stats-api.duckdns.org",
+            "description": "Production server"
+        },
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server"
+        }
+    ]
 )
 
 
