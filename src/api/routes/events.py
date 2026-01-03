@@ -351,16 +351,15 @@ async def get_event_stats(
                 athlete_id,
                 heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
-            INNER JOIN PWA_IWT_EVENTS e ON hr.pwa_event_id = e.event_id
-            WHERE e.id = %s AND hr.sex = %s
+            INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
+            WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL)
             ORDER BY result_total DESC
             LIMIT 1
         """
         best_heat = db.execute_query(best_heat_query, (event_id, sex), fetch_one=True)
 
-        # 3a. Get all heat scores tied for best
-        all_best_heat_scores = []
-        has_multiple_best_heats = False
+        # 3a. Get all heat scores tied for best and populate nested fields
+        best_heat_score_obj = None
         if best_heat:
             best_heat_score_value = best_heat['score']
             all_best_heats_query = """
@@ -370,18 +369,26 @@ async def get_event_stats(
                     athlete_id,
                     heat_id as heat_number
                 FROM PWA_IWT_HEAT_RESULTS hr
-                INNER JOIN PWA_IWT_EVENTS e ON hr.pwa_event_id = e.event_id
-                WHERE e.id = %s AND hr.sex = %s AND ROUND(result_total, 2) = %s
+                INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
+                WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL) AND ROUND(result_total, 2) = %s
                 ORDER BY athlete_name
             """
             all_best_heats = db.execute_query(all_best_heats_query, (event_id, sex, best_heat_score_value))
-            if all_best_heats and len(all_best_heats) > 1:
-                has_multiple_best_heats = True
-                all_best_heat_scores = [ScoreDetail(**row) for row in all_best_heats]
 
-        # 3b. Get all jump scores tied for best
-        all_best_jump_scores = []
-        has_multiple_best_jumps = False
+            # Create ScoreDetail with nested tied scores if multiple
+            if all_best_heats and len(all_best_heats) > 1:
+                # Convert all tied scores to ScoreDetail objects (excluding has_multiple_tied and all_tied_scores)
+                all_tied = [ScoreDetail(**{**row, 'has_multiple_tied': False, 'all_tied_scores': None}) for row in all_best_heats]
+                best_heat_score_obj = ScoreDetail(
+                    **best_heat,
+                    has_multiple_tied=True,
+                    all_tied_scores=all_tied
+                )
+            else:
+                best_heat_score_obj = ScoreDetail(**best_heat, has_multiple_tied=False, all_tied_scores=None)
+
+        # 3b. Get all jump scores tied for best and populate nested fields
+        best_jump_score_obj = None
         if best_jump:
             best_jump_score_value = best_jump['score']
             all_best_jumps_query = """
@@ -398,13 +405,20 @@ async def get_event_stats(
                 ORDER BY athlete_name
             """
             all_best_jumps = db.execute_query(all_best_jumps_query, (event_id, sex, best_jump_score_value))
-            if all_best_jumps and len(all_best_jumps) > 1:
-                has_multiple_best_jumps = True
-                all_best_jump_scores = [JumpScoreDetail(**row) for row in all_best_jumps]
 
-        # 3c. Get all wave scores tied for best
-        all_best_wave_scores = []
-        has_multiple_best_waves = False
+            # Create JumpScoreDetail with nested tied scores if multiple
+            if all_best_jumps and len(all_best_jumps) > 1:
+                all_tied = [JumpScoreDetail(**{**row, 'has_multiple_tied': False, 'all_tied_scores': None}) for row in all_best_jumps]
+                best_jump_score_obj = JumpScoreDetail(
+                    **best_jump,
+                    has_multiple_tied=True,
+                    all_tied_scores=all_tied
+                )
+            else:
+                best_jump_score_obj = JumpScoreDetail(**best_jump, has_multiple_tied=False, all_tied_scores=None)
+
+        # 3c. Get all wave scores tied for best and populate nested fields
+        best_wave_score_obj = None
         if best_wave:
             best_wave_score_value = best_wave['score']
             all_best_waves_query = """
@@ -420,9 +434,17 @@ async def get_event_stats(
                 ORDER BY athlete_name
             """
             all_best_waves = db.execute_query(all_best_waves_query, (event_id, sex, best_wave_score_value))
+
+            # Create ScoreDetail with nested tied scores if multiple
             if all_best_waves and len(all_best_waves) > 1:
-                has_multiple_best_waves = True
-                all_best_wave_scores = [ScoreDetail(**row) for row in all_best_waves]
+                all_tied = [ScoreDetail(**{**row, 'has_multiple_tied': False, 'all_tied_scores': None}) for row in all_best_waves]
+                best_wave_score_obj = ScoreDetail(
+                    **best_wave,
+                    has_multiple_tied=True,
+                    all_tied_scores=all_tied
+                )
+            else:
+                best_wave_score_obj = ScoreDetail(**best_wave, has_multiple_tied=False, all_tied_scores=None)
 
         # 4. Get top 10 heat scores
         heat_scores_query = """
@@ -433,8 +455,8 @@ async def get_event_stats(
                 ROUND(result_total, 2) as score,
                 heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
-            INNER JOIN PWA_IWT_EVENTS e ON hr.pwa_event_id = e.event_id
-            WHERE e.id = %s AND hr.sex = %s
+            INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
+            WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL)
             ORDER BY result_total DESC
             LIMIT 10
         """
@@ -496,15 +518,9 @@ async def get_event_stats(
 
         # Build summary stats
         summary_stats = SummaryStats(
-            best_heat_score=ScoreDetail(**best_heat) if best_heat else None,
-            best_jump_score=JumpScoreDetail(**best_jump) if best_jump else None,
-            best_wave_score=ScoreDetail(**best_wave) if best_wave else None,
-            all_best_heat_scores=all_best_heat_scores if has_multiple_best_heats else None,
-            all_best_jump_scores=all_best_jump_scores if has_multiple_best_jumps else None,
-            all_best_wave_scores=all_best_wave_scores if has_multiple_best_waves else None,
-            has_multiple_best_heat_scores=has_multiple_best_heats,
-            has_multiple_best_jump_scores=has_multiple_best_jumps,
-            has_multiple_best_wave_scores=has_multiple_best_waves
+            best_heat_score=best_heat_score_obj,
+            best_jump_score=best_jump_score_obj,
+            best_wave_score=best_wave_score_obj
         )
 
         # Return complete response

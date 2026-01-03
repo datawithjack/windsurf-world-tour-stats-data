@@ -609,6 +609,10 @@ class ScoreDetail(BaseModel):
     athlete_id: Optional[str] = Field(None, description="Athlete ID")
     heat_number: str = Field(..., description="Heat number/identifier")
 
+    # Multiple best scores
+    has_multiple_tied: bool = Field(False, description="True if multiple athletes are tied for this best score")
+    all_tied_scores: Optional[List['ScoreDetail']] = Field(None, description="All scores tied for this best score (if multiple)")
+
     class Config:
         from_attributes = True
         json_schema_extra = {
@@ -616,18 +620,28 @@ class ScoreDetail(BaseModel):
                 "score": 24.50,
                 "athlete_name": "Degrieck",
                 "athlete_id": "456",
-                "heat_number": "21a"
+                "heat_number": "21a",
+                "has_multiple_tied": False,
+                "all_tied_scores": None
             }
         }
 
 
-class JumpScoreDetail(ScoreDetail):
+class JumpScoreDetail(BaseModel):
     """
     Jump score detail with move type
 
     Extends ScoreDetail with move type information for jump scores.
     """
+    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    athlete_name: str = Field(..., description="Athlete name")
+    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    heat_number: str = Field(..., description="Heat number/identifier")
     move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
+
+    # Multiple best scores
+    has_multiple_tied: bool = Field(False, description="True if multiple athletes are tied for this best score")
+    all_tied_scores: Optional[List['JumpScoreDetail']] = Field(None, description="All jump scores tied for this best score (if multiple)")
 
     class Config:
         from_attributes = True
@@ -637,7 +651,9 @@ class JumpScoreDetail(ScoreDetail):
                 "athlete_name": "Ruano Moreno",
                 "athlete_id": "789",
                 "heat_number": "19a",
-                "move_type": "Forward Loop"
+                "move_type": "Forward Loop",
+                "has_multiple_tied": False,
+                "all_tied_scores": None
             }
         }
 
@@ -737,20 +753,11 @@ class SummaryStats(BaseModel):
     Summary statistics
 
     Best scores across all categories for an event.
+    Each best score object contains has_multiple_tied flag and all_tied_scores list if applicable.
     """
-    best_heat_score: Optional[ScoreDetail] = Field(None, description="Best overall heat score")
-    best_jump_score: Optional[JumpScoreDetail] = Field(None, description="Best individual jump score")
-    best_wave_score: Optional[ScoreDetail] = Field(None, description="Best individual wave score")
-
-    # Multiple best scores (tied for first place)
-    all_best_heat_scores: Optional[List[ScoreDetail]] = Field(None, description="All heat scores tied for best (if multiple)")
-    all_best_jump_scores: Optional[List[JumpScoreDetail]] = Field(None, description="All jump scores tied for best (if multiple)")
-    all_best_wave_scores: Optional[List[ScoreDetail]] = Field(None, description="All wave scores tied for best (if multiple)")
-
-    # Flags for multiple best scores
-    has_multiple_best_heat_scores: bool = Field(False, description="True if multiple heat scores are tied for best")
-    has_multiple_best_jump_scores: bool = Field(False, description="True if multiple jump scores are tied for best")
-    has_multiple_best_wave_scores: bool = Field(False, description="True if multiple wave scores are tied for best")
+    best_heat_score: Optional[ScoreDetail] = Field(None, description="Best overall heat score (includes tied scores if multiple)")
+    best_jump_score: Optional[JumpScoreDetail] = Field(None, description="Best individual jump score (includes tied scores if multiple)")
+    best_wave_score: Optional[ScoreDetail] = Field(None, description="Best individual wave score (includes tied scores if multiple)")
 
     class Config:
         from_attributes = True
