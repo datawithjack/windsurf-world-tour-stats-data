@@ -742,6 +742,16 @@ class SummaryStats(BaseModel):
     best_jump_score: Optional[JumpScoreDetail] = Field(None, description="Best individual jump score")
     best_wave_score: Optional[ScoreDetail] = Field(None, description="Best individual wave score")
 
+    # Multiple best scores (tied for first place)
+    all_best_heat_scores: Optional[List[ScoreDetail]] = Field(None, description="All heat scores tied for best (if multiple)")
+    all_best_jump_scores: Optional[List[JumpScoreDetail]] = Field(None, description="All jump scores tied for best (if multiple)")
+    all_best_wave_scores: Optional[List[ScoreDetail]] = Field(None, description="All wave scores tied for best (if multiple)")
+
+    # Flags for multiple best scores
+    has_multiple_best_heat_scores: bool = Field(False, description="True if multiple heat scores are tied for best")
+    has_multiple_best_jump_scores: bool = Field(False, description="True if multiple jump scores are tied for best")
+    has_multiple_best_wave_scores: bool = Field(False, description="True if multiple wave scores are tied for best")
+
     class Config:
         from_attributes = True
 
@@ -778,9 +788,9 @@ class EventStatsResponse(BaseModel):
     sex: str = Field(..., description="Gender division filter applied")
     summary_stats: SummaryStats = Field(..., description="Summary statistics (best scores)")
     move_type_stats: List[MoveTypeStat] = Field(..., description="Move type statistics (sorted by best_score DESC)")
-    top_heat_scores: List[ScoreEntry] = Field(..., description="All heat scores (sorted DESC)")
-    top_jump_scores: List[JumpScoreEntry] = Field(..., description="All jump scores (sorted DESC)")
-    top_wave_scores: List[ScoreEntry] = Field(..., description="All wave scores (sorted DESC)")
+    top_heat_scores: List[ScoreEntry] = Field(..., description="Top 10 heat scores (sorted DESC)")
+    top_jump_scores: List[JumpScoreEntry] = Field(..., description="Top 10 jump scores (sorted DESC)")
+    top_wave_scores: List[ScoreEntry] = Field(..., description="Top 10 wave scores (sorted DESC)")
     metadata: EventStatsMetadata = Field(..., description="Metadata about the statistics")
 
     class Config:

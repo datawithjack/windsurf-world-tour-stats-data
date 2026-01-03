@@ -358,7 +358,73 @@ async def get_event_stats(
         """
         best_heat = db.execute_query(best_heat_query, (event_id, sex), fetch_one=True)
 
-        # 4. Get all heat scores
+        # 3a. Get all heat scores tied for best
+        all_best_heat_scores = []
+        has_multiple_best_heats = False
+        if best_heat:
+            best_heat_score_value = best_heat['score']
+            all_best_heats_query = """
+                SELECT
+                    ROUND(result_total, 2) as score,
+                    athlete_name,
+                    athlete_id,
+                    heat_id as heat_number
+                FROM PWA_IWT_HEAT_RESULTS hr
+                INNER JOIN PWA_IWT_EVENTS e ON hr.pwa_event_id = e.event_id
+                WHERE e.id = %s AND hr.sex = %s AND ROUND(result_total, 2) = %s
+                ORDER BY athlete_name
+            """
+            all_best_heats = db.execute_query(all_best_heats_query, (event_id, sex, best_heat_score_value))
+            if all_best_heats and len(all_best_heats) > 1:
+                has_multiple_best_heats = True
+                all_best_heat_scores = [ScoreDetail(**row) for row in all_best_heats]
+
+        # 3b. Get all jump scores tied for best
+        all_best_jump_scores = []
+        has_multiple_best_jumps = False
+        if best_jump:
+            best_jump_score_value = best_jump['score']
+            all_best_jumps_query = """
+                SELECT
+                    score,
+                    athlete_name,
+                    athlete_id,
+                    heat_id as heat_number,
+                    move_type
+                FROM EVENT_STATS_VIEW
+                WHERE event_db_id = %s AND sex = %s
+                  AND move_type != 'Wave'
+                  AND score = %s
+                ORDER BY athlete_name
+            """
+            all_best_jumps = db.execute_query(all_best_jumps_query, (event_id, sex, best_jump_score_value))
+            if all_best_jumps and len(all_best_jumps) > 1:
+                has_multiple_best_jumps = True
+                all_best_jump_scores = [JumpScoreDetail(**row) for row in all_best_jumps]
+
+        # 3c. Get all wave scores tied for best
+        all_best_wave_scores = []
+        has_multiple_best_waves = False
+        if best_wave:
+            best_wave_score_value = best_wave['score']
+            all_best_waves_query = """
+                SELECT
+                    score,
+                    athlete_name,
+                    athlete_id,
+                    heat_id as heat_number
+                FROM EVENT_STATS_VIEW
+                WHERE event_db_id = %s AND sex = %s
+                  AND move_type = 'Wave'
+                  AND score = %s
+                ORDER BY athlete_name
+            """
+            all_best_waves = db.execute_query(all_best_waves_query, (event_id, sex, best_wave_score_value))
+            if all_best_waves and len(all_best_waves) > 1:
+                has_multiple_best_waves = True
+                all_best_wave_scores = [ScoreDetail(**row) for row in all_best_waves]
+
+        # 4. Get top 10 heat scores
         heat_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY result_total DESC) as `rank`,
@@ -370,11 +436,12 @@ async def get_event_stats(
             INNER JOIN PWA_IWT_EVENTS e ON hr.pwa_event_id = e.event_id
             WHERE e.id = %s AND hr.sex = %s
             ORDER BY result_total DESC
+            LIMIT 10
         """
         heat_scores = db.execute_query(heat_scores_query, (event_id, sex))
         top_heat_scores = [ScoreEntry(**row) for row in heat_scores] if heat_scores else []
 
-        # 5. Get all jump scores (non-Wave)
+        # 5. Get top 10 jump scores (non-Wave)
         jump_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY score DESC) as `rank`,
@@ -388,11 +455,12 @@ async def get_event_stats(
               AND sex = %s
               AND move_type != 'Wave'
             ORDER BY score DESC
+            LIMIT 10
         """
         jump_scores = db.execute_query(jump_scores_query, (event_id, sex))
         top_jump_scores = [JumpScoreEntry(**row) for row in jump_scores] if jump_scores else []
 
-        # 6. Get all wave scores
+        # 6. Get top 10 wave scores
         wave_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY score DESC) as `rank`,
@@ -405,6 +473,7 @@ async def get_event_stats(
               AND sex = %s
               AND move_type = 'Wave'
             ORDER BY score DESC
+            LIMIT 10
         """
         wave_scores = db.execute_query(wave_scores_query, (event_id, sex))
         top_wave_scores = [ScoreEntry(**row) for row in wave_scores] if wave_scores else []
@@ -429,7 +498,13 @@ async def get_event_stats(
         summary_stats = SummaryStats(
             best_heat_score=ScoreDetail(**best_heat) if best_heat else None,
             best_jump_score=JumpScoreDetail(**best_jump) if best_jump else None,
-            best_wave_score=ScoreDetail(**best_wave) if best_wave else None
+            best_wave_score=ScoreDetail(**best_wave) if best_wave else None,
+            all_best_heat_scores=all_best_heat_scores if has_multiple_best_heats else None,
+            all_best_jump_scores=all_best_jump_scores if has_multiple_best_jumps else None,
+            all_best_wave_scores=all_best_wave_scores if has_multiple_best_waves else None,
+            has_multiple_best_heat_scores=has_multiple_best_heats,
+            has_multiple_best_jump_scores=has_multiple_best_jumps,
+            has_multiple_best_wave_scores=has_multiple_best_waves
         )
 
         # Return complete response
