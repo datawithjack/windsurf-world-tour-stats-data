@@ -344,16 +344,20 @@ async def get_event_stats(
                     }
 
         # 3. Get best heat score (from heat results)
+        # Join through unified ATHLETES table to get correct sex when heat results sex field is empty
         best_heat_query = """
             SELECT
-                ROUND(result_total, 2) as score,
-                athlete_name,
-                athlete_id,
-                heat_id as heat_number
+                ROUND(hr.result_total, 2) as score,
+                hr.athlete_name,
+                hr.athlete_id,
+                hr.heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
             INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
-            WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL)
-            ORDER BY result_total DESC
+            INNER JOIN ATHLETE_SOURCE_IDS asi_hr ON hr.source = asi_hr.source AND hr.athlete_id = asi_hr.source_id
+            INNER JOIN PWA_IWT_RESULTS r ON r.source = e.source AND r.event_id = e.event_id
+            INNER JOIN ATHLETE_SOURCE_IDS asi_r ON r.source = asi_r.source AND r.athlete_id = asi_r.source_id
+            WHERE e.id = %s AND r.sex = %s AND asi_hr.athlete_id = asi_r.athlete_id
+            ORDER BY hr.result_total DESC
             LIMIT 1
         """
         best_heat = db.execute_query(best_heat_query, (event_id, sex), fetch_one=True)
@@ -364,14 +368,18 @@ async def get_event_stats(
             best_heat_score_value = best_heat['score']
             all_best_heats_query = """
                 SELECT
-                    ROUND(result_total, 2) as score,
-                    athlete_name,
-                    athlete_id,
-                    heat_id as heat_number
+                    ROUND(hr.result_total, 2) as score,
+                    hr.athlete_name,
+                    hr.athlete_id,
+                    hr.heat_id as heat_number
                 FROM PWA_IWT_HEAT_RESULTS hr
                 INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
-                WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL) AND ROUND(result_total, 2) = %s
-                ORDER BY athlete_name
+                INNER JOIN ATHLETE_SOURCE_IDS asi_hr ON hr.source = asi_hr.source AND hr.athlete_id = asi_hr.source_id
+                INNER JOIN PWA_IWT_RESULTS r ON r.source = e.source AND r.event_id = e.event_id
+                INNER JOIN ATHLETE_SOURCE_IDS asi_r ON r.source = asi_r.source AND r.athlete_id = asi_r.source_id
+                WHERE e.id = %s AND r.sex = %s AND asi_hr.athlete_id = asi_r.athlete_id
+                  AND ROUND(hr.result_total, 2) = %s
+                ORDER BY hr.athlete_name
             """
             all_best_heats = db.execute_query(all_best_heats_query, (event_id, sex, best_heat_score_value))
 
@@ -449,15 +457,18 @@ async def get_event_stats(
         # 4. Get top 10 heat scores
         heat_scores_query = """
             SELECT
-                ROW_NUMBER() OVER (ORDER BY result_total DESC) as `rank`,
-                athlete_name,
-                athlete_id,
-                ROUND(result_total, 2) as score,
-                heat_id as heat_number
+                ROW_NUMBER() OVER (ORDER BY hr.result_total DESC) as `rank`,
+                hr.athlete_name,
+                hr.athlete_id,
+                ROUND(hr.result_total, 2) as score,
+                hr.heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
             INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
-            WHERE e.id = %s AND (hr.sex = %s OR hr.sex = '' OR hr.sex IS NULL)
-            ORDER BY result_total DESC
+            INNER JOIN ATHLETE_SOURCE_IDS asi_hr ON hr.source = asi_hr.source AND hr.athlete_id = asi_hr.source_id
+            INNER JOIN PWA_IWT_RESULTS r ON r.source = e.source AND r.event_id = e.event_id
+            INNER JOIN ATHLETE_SOURCE_IDS asi_r ON r.source = asi_r.source AND r.athlete_id = asi_r.source_id
+            WHERE e.id = %s AND r.sex = %s AND asi_hr.athlete_id = asi_r.athlete_id
+            ORDER BY hr.result_total DESC
             LIMIT 10
         """
         heat_scores = db.execute_query(heat_scores_query, (event_id, sex))
