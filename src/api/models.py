@@ -455,7 +455,7 @@ class HeatScore(BaseModel):
     Heat score breakdown
     """
     heat_number: str = Field(..., description="Heat identifier (e.g., '19a', '23a')")
-    score: float = Field(..., description="Total heat score")
+    score: Optional[float] = Field(None, description="Total heat score (null if incomplete)")
     elimination_type: Optional[str] = Field(None, description="Either 'Single' or 'Double' (null if unknown)")
 
     class Config:
