@@ -349,8 +349,12 @@ def create_event_stats_view(cursor):
         AND s.source = e.source
 
     -- Join to athlete source IDs to get unified athlete ID
+    -- Map PWA heat scores to PWA_heat source in ATHLETE_SOURCE_IDS
     LEFT JOIN ATHLETE_SOURCE_IDS asi
-        ON s.source = asi.source
+        ON (
+            (s.source = 'PWA' AND asi.source = 'PWA_heat')
+            OR (s.source = 'Live Heats' AND asi.source = 'Live Heats')
+        )
         AND s.athlete_id = asi.source_id
 
     -- Join to unified athlete profile for primary name
