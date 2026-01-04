@@ -955,21 +955,24 @@ async def get_athlete_event_stats(
         best_heat_score = BestHeatScore(
             score=best_heat_result['score'],
             heat=best_heat_result['heat'],
+            round_name=best_heat_result.get('round_name'),
             opponents=parse_opponents(best_heat_result.get('opponents_str'))
-        ) if best_heat_result else BestHeatScore(score=0.0, heat='', opponents=None)
+        ) if best_heat_result else BestHeatScore(score=0.0, heat='', round_name=None, opponents=None)
 
         best_jump_score = BestJumpScore(
             score=best_jump_result['score'],
             heat=best_jump_result['heat'],
+            round_name=best_jump_result.get('round_name'),
             move=best_jump_result['move'],
             opponents=parse_opponents(best_jump_result.get('opponents_str'))
-        ) if best_jump_result else BestJumpScore(score=0.0, heat='', move='', opponents=None)
+        ) if best_jump_result else BestJumpScore(score=0.0, heat='', round_name=None, move='', opponents=None)
 
         best_wave_score = BestWaveScore(
             score=best_wave_result['score'],
             heat=best_wave_result['heat'],
+            round_name=best_wave_result.get('round_name'),
             opponents=parse_opponents(best_wave_result.get('opponents_str'))
-        ) if best_wave_result else BestWaveScore(score=0.0, heat='', opponents=None)
+        ) if best_wave_result else BestWaveScore(score=0.0, heat='', round_name=None, opponents=None)
 
         summary_stats = AthleteSummaryStats(
             overall_position=profile_result['overall_position'],
