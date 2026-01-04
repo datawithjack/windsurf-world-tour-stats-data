@@ -387,6 +387,7 @@ class BestHeatScore(BaseModel):
     """
     score: float = Field(..., description="Total heat score")
     heat: str = Field(..., description="Heat identifier")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
     opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
 
     class Config:
@@ -399,7 +400,8 @@ class BestJumpScore(BaseModel):
     """
     score: float = Field(..., description="Jump score")
     heat: str = Field(..., description="Heat identifier")
-    move: str = Field(..., description="Move type name")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
+    move: str = Field(..., description="Move type name (decoded from codes like B, F, P)")
     opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
 
     class Config:
@@ -412,6 +414,7 @@ class BestWaveScore(BaseModel):
     """
     score: float = Field(..., description="Wave score")
     heat: str = Field(..., description="Heat identifier")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
     opponents: Optional[List[str]] = Field(None, description="List of opponent names in that heat")
 
     class Config:
@@ -435,7 +438,7 @@ class MoveTypeScore(BaseModel):
     """
     Move type statistics
     """
-    move_type: str = Field(..., description="Move type name (e.g., 'Forward Loop', 'Wave')")
+    move_type: str = Field(..., description="Move type name (e.g., 'Forward Loop', 'Backloop', 'Wave')")
     best_score: float = Field(..., description="Best score achieved for this move type")
     average_score: float = Field(..., description="Average score for this move type")
 
@@ -455,7 +458,9 @@ class HeatScore(BaseModel):
     Heat score breakdown
     """
     heat_number: str = Field(..., description="Heat identifier (e.g., '19a', '23a')")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
     score: Optional[float] = Field(None, description="Total heat score (null if incomplete)")
+    place: Optional[int] = Field(None, description="Placement in heat (1=1st, 2=2nd, etc.)")
     elimination_type: Optional[str] = Field(None, description="Either 'Single' or 'Double' (null if unknown)")
 
     class Config:
@@ -467,7 +472,8 @@ class JumpScore(BaseModel):
     Individual jump score
     """
     heat_number: str = Field(..., description="Heat identifier where jump was performed")
-    move: str = Field(..., description="Move type performed")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
+    move: str = Field(..., description="Move type performed (decoded from codes like B, F, P)")
     score: float = Field(..., description="Individual jump score")
     counting: bool = Field(..., description="Whether this score counted toward heat total")
 
@@ -480,6 +486,7 @@ class WaveScore(BaseModel):
     Individual wave score
     """
     heat_number: str = Field(..., description="Heat identifier where wave was ridden")
+    round_name: Optional[str] = Field(None, description="Round name (e.g., 'Final', 'Semi-Finals')")
     score: float = Field(..., description="Individual wave score")
     counting: bool = Field(..., description="Whether this score counted toward heat total")
     wave_index: Optional[int] = Field(None, description="Wave index number (optional)")
