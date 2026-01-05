@@ -67,6 +67,7 @@ class UpdateChecker:
     def get_recent_events_from_db(self) -> pd.DataFrame:
         """
         Query database for events from last N days
+        NOTE: Gets ALL events (not just wave) because 2026 events may not have discipline icons yet
 
         Returns:
             DataFrame with database events
@@ -99,7 +100,7 @@ class UpdateChecker:
         cursor.close()
 
         df = pd.DataFrame(results)
-        self.log(f"Found {len(df)} events in database")
+        self.log(f"Found {len(df)} events in database (all disciplines)")
 
         return df
 
@@ -128,20 +129,19 @@ class UpdateChecker:
                 self.log("WARNING: PWA scraper returned no events", "WARNING")
                 return pd.DataFrame()
 
-            # Filter for wave events only
-            pwa_events = pwa_events[pwa_events['has_wave_discipline'] == True].copy()
-
             # Convert event_id to int
             pwa_events['event_id'] = pd.to_numeric(pwa_events['event_id'], errors='coerce')
 
             # Filter for recent events (last N days or in-progress/upcoming)
             # Note: event_status is stored as STRING ('1', '2', '3') not int
+            # NOTE: Not filtering by has_wave_discipline because 2026 events
+            # don't have discipline icons added yet
             recent_pwa = pwa_events[
                 (pwa_events['end_date'] >= self.cutoff_date) |
                 (pwa_events['event_status'].isin(['1', '2']))  # Fixed: use strings not ints
             ].copy()
 
-            self.log(f"Found {len(recent_pwa)} recent wave events on PWA website")
+            self.log(f"Found {len(recent_pwa)} recent events on PWA website (all disciplines)")
 
             return recent_pwa
 

@@ -116,14 +116,16 @@ class IncrementalScraper:
             # Initialize results scraper with events DataFrame
             scraper = PWAResultsScraper(events_df=events_df)
 
-            # Load wave events (will use our filtered DataFrame)
-            wave_events = scraper.load_wave_events()
+            # Load events (will use our filtered DataFrame)
+            # NOTE: Not filtering by wave discipline - get ALL events
+            # because 2026 events may not have discipline icons yet
+            events_to_scrape = scraper.load_wave_events(wave_only=False)
 
-            if wave_events.empty:
-                self.log("No wave events found", "WARNING")
+            if events_to_scrape.empty:
+                self.log("No events found", "WARNING")
                 return pd.DataFrame()
 
-            # Scrape results for all wave events
+            # Scrape results for all events
             scraper.scrape_all_events()
 
             # Convert to DataFrame

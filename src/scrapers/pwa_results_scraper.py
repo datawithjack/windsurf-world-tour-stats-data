@@ -75,12 +75,15 @@ class PWAResultsScraper:
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] [{level}] {message}")
 
-    def load_wave_events(self):
+    def load_wave_events(self, wave_only=True):
         """
         Load wave events from CSV or DataFrame
 
+        Args:
+            wave_only: If True, filter for wave events only. If False, return all events.
+
         Returns:
-            DataFrame of wave events only
+            DataFrame of events
         """
         if self.events_df is not None:
             self.log("Using provided events DataFrame...")
@@ -89,11 +92,15 @@ class PWAResultsScraper:
             self.log("Loading PWA events from CSV...")
             df = pd.read_csv(self.events_csv_path)
 
-        # Filter for wave events only
-        wave_events = df[df['has_wave_discipline'] == True].copy()
+        # Filter for wave events only if requested
+        if wave_only:
+            events = df[df['has_wave_discipline'] == True].copy()
+            self.log(f"Loaded {len(events)} wave events from {len(df)} total events")
+        else:
+            events = df.copy()
+            self.log(f"Loaded {len(events)} events (all disciplines)")
 
-        self.log(f"Loaded {len(wave_events)} wave events from {len(df)} total events")
-        return wave_events
+        return events
 
     def extract_wave_division_links(self, event_id):
         """
