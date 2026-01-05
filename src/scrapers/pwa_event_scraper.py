@@ -186,7 +186,12 @@ class PWAEventScraper:
 
             # Extract event title
             try:
-                event_title = event_card.find_element(By.CLASS_NAME, "event-title").text.strip()
+                title_element = event_card.find_element(By.CLASS_NAME, "event-title")
+                event_title = title_element.text.strip()
+
+                # Debug: Log if title is empty
+                if not event_title:
+                    self.log(f"  WARNING: event_title is empty for event_id {event_id} (element found but .text is empty)")
             except Exception as e:
                 # Log why event title extraction failed
                 self.log(f"  WARNING: Could not extract event_title for event_id {event_id}: {type(e).__name__}")
