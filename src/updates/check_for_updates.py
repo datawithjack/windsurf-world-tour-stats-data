@@ -89,7 +89,7 @@ class UpdateChecker:
             WHERE source = 'PWA'
                 AND (
                     end_date >= %s
-                    OR event_status IN (1, 2)
+                    OR event_status IN (0, 1, 2)
                 )
             ORDER BY year DESC, start_date DESC
         """
@@ -133,12 +133,13 @@ class UpdateChecker:
             pwa_events['event_id'] = pd.to_numeric(pwa_events['event_id'], errors='coerce')
 
             # Filter for recent events (last N days or in-progress/upcoming)
-            # Note: event_status is stored as STRING ('1', '2', '3') not int
+            # Note: event_status is stored as STRING ('0', '1', '2', '3') not int
+            # Status codes: 0=TBC/Draft, 1=Upcoming, 2=In Progress, 3=Completed
             # NOTE: Not filtering by has_wave_discipline because 2026 events
             # don't have discipline icons added yet
             recent_pwa = pwa_events[
                 (pwa_events['end_date'] >= self.cutoff_date) |
-                (pwa_events['event_status'].isin(['1', '2']))  # Fixed: use strings not ints
+                (pwa_events['event_status'].isin(['0', '1', '2']))  # Include TBC (0), Upcoming (1), In Progress (2)
             ].copy()
 
             self.log(f"Found {len(recent_pwa)} recent events on PWA website (all disciplines)")
