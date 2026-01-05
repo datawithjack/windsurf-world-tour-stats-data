@@ -507,11 +507,15 @@ class PWAHeatScraper:
 
     def scrape_all_events(self):
         """Scrape heat data for all events"""
-        # Load unique events from tracking data
-        tracking_df = pd.read_csv(self.tracking_csv_path)
+        # Load divisions to scrape (with event_ids filtering applied)
+        divisions_df = self.load_divisions_to_scrape()
 
-        # Get unique events
-        events_df = tracking_df[['event_id', 'event_name', 'year']].drop_duplicates()
+        if divisions_df.empty:
+            self.log("No divisions to scrape (all events filtered out or no heat data available)", "INFO")
+            return
+
+        # Get unique events from filtered divisions
+        events_df = divisions_df[['event_id', 'event_name', 'year']].drop_duplicates()
 
         if events_df.empty:
             self.log("No events to scrape!", "WARNING")
