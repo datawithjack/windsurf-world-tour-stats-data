@@ -108,9 +108,9 @@ class PWAHeatScraper:
         # If event_ids filter is set, filter by event IDs
         if self.event_ids_filter:
             divisions_with_results = divisions_with_results[
-                divisions_with_results['pwa_event_id'].isin(self.event_ids_filter)
+                divisions_with_results['event_id'].isin(self.event_ids_filter)
             ].copy()
-            self.log(f"Filtering to {len(self.event_ids_filter)} specified event IDs")
+            self.log(f"Filtered to {len(divisions_with_results)} divisions from {len(self.event_ids_filter)} specified event IDs")
 
         self.log(f"Found {len(divisions_with_results)} divisions with results to check for heat data")
         return divisions_with_results
