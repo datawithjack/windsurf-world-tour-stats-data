@@ -1,0 +1,193 @@
+name: PWA Daily Update
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  STAGING_DIR: data/staging
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  daily-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          # Install Chromium for Selenium
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+
+      # 4. Setup SSH tunnel to Oracle MySQL
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Create SSH tunnel to database
+        run: |
+          # Add host to known_hosts
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # Create tunnel in background
+          ssh -f -N -L 3306:10.0.151.92:3306 \
+            -o StrictHostKeyChecking=no \
+            ubuntu@${{ secrets.SSH_HOST }}
+
+          # Verify tunnel is active
+          sleep 5
+          nc -zv localhost 3306
+
+      # 5. Create environment file
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          DB_HOST=localhost
+          DB_PORT=3306
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          EOF
+
+      # 6. Create staging directory
+      - name: Create staging directory
+        run: mkdir -p ${{ env.STAGING_DIR }}
+
+      # 7. Check for updates
+      - name: Check for updates (last 60 days)
+        id: check_updates
+        run: |
+          python src/updates/check_for_updates.py \
+            --lookback-days 60 \
+            --output ${{ env.STAGING_DIR }}/events_to_update.json
+
+          # Export event count for later steps
+          EVENT_COUNT=$(jq '.total_events' ${{ env.STAGING_DIR }}/events_to_update.json)
+          echo "event_count=$EVENT_COUNT" >> $GITHUB_OUTPUT
+          echo "Found $EVENT_COUNT events to update"
+
+      # 8. Scrape updated events (only if events found)
+      - name: Scrape updated events
+        if: steps.check_updates.outputs.event_count > 0
+        run: |
+          python src/updates/incremental_scraper.py \
+            --events-json ${{ env.STAGING_DIR }}/events_to_update.json \
+            --output-dir ${{ env.STAGING_DIR }}
+
+      # 9. Detect changes and validate
+      - name: Detect changes and validate data
+        if: steps.check_updates.outputs.event_count > 0
+        id: detect_changes
+        run: |
+          python src/updates/detect_changes.py \
+            --staging-dir ${{ env.STAGING_DIR }} \
+            --output ${{ env.STAGING_DIR }}/change_report.json
+
+          # Check validation issues
+          ISSUE_COUNT=$(jq '.total_validation_issues' ${{ env.STAGING_DIR }}/change_report.json)
+          echo "validation_issues=$ISSUE_COUNT" >> $GITHUB_OUTPUT
+
+          # Check issue percentage (fail if >10%)
+          ISSUE_PCT=$(jq '.issue_percentage' ${{ env.STAGING_DIR }}/change_report.json)
+          echo "Issue percentage: $ISSUE_PCT%"
+
+          if (( $(echo "$ISSUE_PCT > 10" | bc -l) )); then
+            echo "ERROR: $ISSUE_PCT% of records have validation issues (threshold: 10%)"
+            exit 1
+          fi
+
+      # 10. Update database
+      - name: Update database
+        if: steps.check_updates.outputs.event_count > 0
+        run: |
+          python src/updates/update_database.py \
+            --staging-dir ${{ env.STAGING_DIR }} \
+            --change-report ${{ env.STAGING_DIR }}/change_report.json \
+            --output ${{ env.STAGING_DIR }}/update_log.json
+
+      # 11. Generate summary
+      - name: Generate update summary
+        id: summary
+        if: always()
+        run: |
+          python src/updates/generate_summary.py \
+            --staging-dir ${{ env.STAGING_DIR }} \
+            --output ${{ env.STAGING_DIR }}/update_summary.txt
+
+          # Set status for email subject
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "status=SUCCESS" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILURE" >> $GITHUB_OUTPUT
+          fi
+
+          # Display summary
+          cat ${{ env.STAGING_DIR }}/update_summary.txt
+
+      # 12. Upload artifacts (for debugging)
+      - name: Upload staging artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-artifacts-${{ github.run_number }}
+          path: ${{ env.STAGING_DIR }}/
+          retention-days: 30
+
+      # 13. Create GitHub issue on failure
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = 'Summary not available';
+            try {
+              summary = fs.readFileSync('${{ env.STAGING_DIR }}/update_summary.txt', 'utf8');
+            } catch (e) {
+              console.log('Could not read summary file:', e);
+            }
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Daily Update Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Daily Update Failure\n\n**Workflow Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n### Summary\n\`\`\`\n${summary}\n\`\`\`\n\n### Artifacts\n\nSee [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for detailed logs and staging files.`,
+              labels: ['automated', 'daily-update', 'error']
+            });
+
+      # 14. Send email notification
+      - name: Send email notification
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "PWA Daily Update: ${{ steps.summary.outputs.status }} - ${{ steps.check_updates.outputs.event_count }} events"
+          body: file://${{ env.STAGING_DIR }}/update_summary.txt
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: PWA Update Bot <${{ secrets.EMAIL_USERNAME }}>
+
+      # 15. Cleanup SSH tunnel
+      - name: Cleanup SSH tunnel
+        if: always()
+        run: |
+          # Kill SSH tunnel process
+          pkill -f "ssh.*3306:10.0.151.92:3306" || true

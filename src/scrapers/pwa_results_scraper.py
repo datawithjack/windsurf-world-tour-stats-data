@@ -22,14 +22,19 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class PWAResultsScraper:
     """Scraper for PWA wave event final results"""
 
-    def __init__(self, events_csv_path):
+    def __init__(self, events_csv_path=None, events_df=None):
         """
         Initialize the scraper
 
         Args:
-            events_csv_path: Path to PWA events CSV file
+            events_csv_path: Path to PWA events CSV file (optional if events_df provided)
+            events_df: DataFrame with PWA events (optional if events_csv_path provided)
         """
+        if events_csv_path is None and events_df is None:
+            raise ValueError("Either events_csv_path or events_df must be provided")
+
         self.events_csv_path = events_csv_path
+        self.events_df = events_df
         self.results_data = []
         self.division_data = []
         self.scraped_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -72,13 +77,17 @@ class PWAResultsScraper:
 
     def load_wave_events(self):
         """
-        Load wave events from CSV
+        Load wave events from CSV or DataFrame
 
         Returns:
             DataFrame of wave events only
         """
-        self.log("Loading PWA events from CSV...")
-        df = pd.read_csv(self.events_csv_path)
+        if self.events_df is not None:
+            self.log("Using provided events DataFrame...")
+            df = self.events_df
+        else:
+            self.log("Loading PWA events from CSV...")
+            df = pd.read_csv(self.events_csv_path)
 
         # Filter for wave events only
         wave_events = df[df['has_wave_discipline'] == True].copy()

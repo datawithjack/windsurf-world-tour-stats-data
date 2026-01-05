@@ -20,15 +20,17 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 class PWAEventScraper:
     """Scraper for PWA World Tour events"""
 
-    def __init__(self, start_year=2016, headless=True):
+    def __init__(self, start_year=2016, headless=True, event_ids=None):
         """
         Initialize the scraper
 
         Args:
             start_year: Earliest year to scrape (default: 2016)
             headless: Run browser in headless mode (default: True)
+            event_ids: Optional list of event IDs to filter (default: None = scrape all)
         """
         self.start_year = start_year
+        self.event_ids_filter = set(map(int, event_ids)) if event_ids else None
         self.base_url = "https://www.pwaworldtour.com/index.php?id=2337"
 
         # Set up Chrome WebDriver
@@ -162,6 +164,14 @@ class PWAEventScraper:
             except IndexError:
                 self.log(f"WARNING: Could not extract event_id from href: {event_href}")
                 event_id = None
+
+            # If event_ids filter is set, skip events not in the filter
+            if self.event_ids_filter and event_id:
+                try:
+                    if int(event_id) not in self.event_ids_filter:
+                        return None  # Skip this event
+                except (ValueError, TypeError):
+                    pass  # Continue if event_id can't be converted to int
 
             # Extract event title
             try:

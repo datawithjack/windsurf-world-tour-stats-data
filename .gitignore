@@ -82,6 +82,8 @@ deployment/secrets/
 data/raw/
 data/processed/
 data/reports/
+data/staging/*
+!data/staging/.gitkeep
 *.csv
 *.json
 *.xml
