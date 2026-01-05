@@ -60,6 +60,17 @@ class PWAEventScraper:
         self.log("Navigating to PWA events page...")
         self.driver.get(self.base_url)
 
+        # Wait for dropdown to be present (important for slow connections)
+        try:
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".nav-sub.select-box .label"))
+            )
+            self.log("Dropdown element found, waiting for page to stabilize...")
+            time.sleep(2)  # Additional wait for page stability
+        except Exception as e:
+            self.log(f"ERROR: Dropdown element not found after {self.wait._timeout}s: {e}")
+            return []
+
         # Click the dropdown toggle using JavaScript
         dropdown_toggle_js = """
         var dropdown = document.querySelector('.nav-sub.select-box .label');
@@ -176,7 +187,9 @@ class PWAEventScraper:
             # Extract event title
             try:
                 event_title = event_card.find_element(By.CLASS_NAME, "event-title").text.strip()
-            except:
+            except Exception as e:
+                # Log why event title extraction failed
+                self.log(f"  WARNING: Could not extract event_title for event_id {event_id}: {type(e).__name__}")
                 event_title = ""
 
             # Extract event date
