@@ -112,12 +112,21 @@ class UpdateChecker:
         """
         self.log("Scraping PWA website for current events...")
 
-        # Use PWAEventScraper to get all events
-        scraper = PWAEventScraper(start_year=2016, headless=True)
+        # Only scrape current year and previous year for efficiency
+        current_year = datetime.now().year
+        start_year = current_year - 1
+
+        # Use PWAEventScraper to get recent events only
+        scraper = PWAEventScraper(start_year=start_year, headless=True)
 
         try:
             scraper.scrape_all_years()
             pwa_events = pd.DataFrame(scraper.events_data)
+
+            # Check if scraper got any events
+            if pwa_events.empty:
+                self.log("WARNING: PWA scraper returned no events", "WARNING")
+                return pd.DataFrame()
 
             # Filter for wave events only
             pwa_events = pwa_events[pwa_events['has_wave_discipline'] == True].copy()
@@ -126,9 +135,10 @@ class UpdateChecker:
             pwa_events['event_id'] = pd.to_numeric(pwa_events['event_id'], errors='coerce')
 
             # Filter for recent events (last N days or in-progress/upcoming)
+            # Note: event_status is stored as STRING ('1', '2', '3') not int
             recent_pwa = pwa_events[
                 (pwa_events['end_date'] >= self.cutoff_date) |
-                (pwa_events['event_status'].isin([1, 2]))
+                (pwa_events['event_status'].isin(['1', '2']))  # Fixed: use strings not ints
             ].copy()
 
             self.log(f"Found {len(recent_pwa)} recent wave events on PWA website")
