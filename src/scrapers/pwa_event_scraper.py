@@ -186,12 +186,16 @@ class PWAEventScraper:
 
             # Extract event title
             try:
-                title_element = event_card.find_element(By.CLASS_NAME, "event-title")
-                event_title = title_element.text.strip()
+                # Use JavaScript to get text content directly (more reliable than .text for slow loading)
+                event_title_js = """
+                var titleElement = arguments[0].querySelector('.event-title');
+                return titleElement ? titleElement.textContent.trim() : '';
+                """
+                event_title = self.driver.execute_script(event_title_js, event_card)
 
                 # Debug: Log if title is empty
                 if not event_title:
-                    self.log(f"  WARNING: event_title is empty for event_id {event_id} (element found but .text is empty)")
+                    self.log(f"  WARNING: event_title is empty for event_id {event_id} (textContent is empty)")
             except Exception as e:
                 # Log why event title extraction failed
                 self.log(f"  WARNING: Could not extract event_title for event_id {event_id}: {type(e).__name__}")
