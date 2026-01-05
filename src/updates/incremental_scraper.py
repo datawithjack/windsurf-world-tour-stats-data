@@ -59,14 +59,18 @@ class IncrementalScraper:
 
         scraper = None
         try:
+            # Only scrape current year and previous year for efficiency
+            current_year = datetime.now().year
+            start_year = current_year - 1
+
             # Initialize scraper with event_ids filter
             scraper = PWAEventScraper(
-                start_year=2016,
+                start_year=start_year,
                 headless=True,
                 event_ids=self.event_ids
             )
 
-            # Scrape all years (but only matching events will be extracted)
+            # Scrape filtered years (but only matching events will be extracted)
             scraper.scrape_all_years()
 
             # Convert to DataFrame
