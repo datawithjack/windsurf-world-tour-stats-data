@@ -78,7 +78,9 @@ class ChangeDetector:
             issues.append(f"Events: {null_names} records with null event_name")
 
         # Check for invalid status codes
-        invalid_status = df[~df['event_status'].isin(['1', '2', '3', ''])].shape[0]
+        # Valid statuses: 0 (TBC), 1 (Upcoming), 2 (In Progress), 3 (Completed)
+        valid_statuses = [0, 1, 2, 3]
+        invalid_status = df[~df['event_status'].isin(valid_statuses) & df['event_status'].notna()].shape[0]
         if invalid_status > 0:
             issues.append(f"Events: {invalid_status} records with invalid event_status")
 

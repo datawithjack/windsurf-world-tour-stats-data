@@ -203,7 +203,12 @@ class PWAEventScraper:
 
             # Extract event date
             try:
-                event_date = event_card.find_element(By.CLASS_NAME, "event-date").text.strip()
+                # Use JavaScript to get text content directly (more reliable than .text for slow loading)
+                event_date_js = """
+                var dateElement = arguments[0].querySelector('.event-date');
+                return dateElement ? dateElement.textContent.trim() : '';
+                """
+                event_date = self.driver.execute_script(event_date_js, event_card)
             except:
                 event_date = ""
 
