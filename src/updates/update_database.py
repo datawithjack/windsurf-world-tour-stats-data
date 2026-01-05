@@ -128,24 +128,24 @@ class DatabaseUpdater:
                 for _, row in batch.iterrows():
                     values.append((
                         row.get('source', 'PWA'),
-                        row.get('scraped_at'),
+                        row.get('scraped_at') if pd.notna(row.get('scraped_at')) else None,
                         int(row['year']) if pd.notna(row.get('year')) else None,
                         int(row['event_id']) if pd.notna(row.get('event_id')) else None,
-                        row.get('event_name'),
-                        row.get('event_url'),
-                        row.get('event_date'),
-                        row.get('start_date'),
-                        row.get('end_date'),
+                        row.get('event_name') if pd.notna(row.get('event_name')) else None,
+                        row.get('event_url') if pd.notna(row.get('event_url')) else None,
+                        row.get('event_date') if pd.notna(row.get('event_date')) else None,
+                        row.get('start_date') if pd.notna(row.get('start_date')) else None,
+                        row.get('end_date') if pd.notna(row.get('end_date')) else None,
                         int(row['day_window']) if pd.notna(row.get('day_window')) else None,
-                        row.get('event_section'),
-                        row.get('event_status'),
-                        row.get('competition_state'),
+                        row.get('event_section') if pd.notna(row.get('event_section')) else None,
+                        int(row.get('event_status')) if pd.notna(row.get('event_status')) else None,
+                        int(row.get('competition_state')) if pd.notna(row.get('competition_state')) else None,
                         bool(row.get('has_wave_discipline', False)),
-                        row.get('all_disciplines'),
-                        row.get('country_flag'),
-                        row.get('country_code'),
+                        row.get('all_disciplines') if pd.notna(row.get('all_disciplines')) else None,
+                        row.get('country_flag') if pd.notna(row.get('country_flag')) else None,
+                        row.get('country_code') if pd.notna(row.get('country_code')) else None,
                         int(row['stars']) if pd.notna(row.get('stars')) else None,
-                        row.get('event_image_url')
+                        row.get('event_image_url') if pd.notna(row.get('event_image_url')) else None
                     ))
 
                 cursor.executemany(upsert_query, values)
