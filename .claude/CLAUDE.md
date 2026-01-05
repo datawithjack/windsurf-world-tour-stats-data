@@ -99,24 +99,29 @@ Windsurf World Tour Stats/
 │   │   ├── pwa_wave_results_raw.csv              ✅ 1,879 results
 │   │   ├── pwa_heat_structure.csv                ✅ 113 heats
 │   │   ├── pwa_heat_results.csv                  ✅ 344 results
-│   │   ├── pwa_heat_scores.csv                   ✅ 1,901 scores
+│   │   ├── pwa_heat_scores.csv                   ✅ PWA scores (see note)
 │   │   └── pwa_athlete_profiles.csv              ✅ 281 athletes
 │   ├── raw/liveheats/
 │   │   ├── liveheats_matched_results.csv         ✅ 173 results (5 divisions)
 │   │   ├── liveheats_heat_progression.csv        ✅ 106 heats
 │   │   ├── liveheats_heat_results.csv            ✅ 449 results
-│   │   ├── liveheats_heat_scores.csv             ✅ 1,913 scores
+│   │   ├── liveheats_heat_scores.csv             ✅ LiveHeats scores (see note)
 │   │   └── liveheats_athlete_profiles.csv        ✅ 233 athletes
 │   ├── processed/
 │   │   ├── wave_results_merged.csv               ✅ 2,052 results
 │   │   ├── heat_progression_merged.csv           ✅ 219 heats
 │   │   ├── heat_results_merged.csv               ✅ 793 results
-│   │   ├── heat_scores_merged.csv                ✅ 3,814 scores
+│   │   ├── heat_scores_merged.csv                ✅ 39,460 scores (deduplicated)
 │   │   └── athletes/
 │   │       ├── athletes_final.csv                ✅ 359 unified athletes
 │   │       └── athlete_ids_link.csv              ✅ 514 source ID mappings
 │   └── reports/
 │       └── pwa_liveheats_matching_report.csv     ✅ Athlete matching audit
+│
+│ **Note on Heat Scores**: Raw CSV files may contain duplicates from multiple scraping runs.
+│ Database was deduplicated in January 2026 (41,402 duplicates removed from 80,862 records).
+│ Current clean database count: 39,460 records (33,223 PWA + 6,237 LiveHeats).
+│
 ├── deployment/            # Production deployment configs
 │   ├── gunicorn.conf.py                          ✅ COMPLETE
 │   ├── nginx.conf                                ✅ COMPLETE
@@ -340,7 +345,9 @@ CREATE TABLE PWA_IWT_HEAT_RESULTS (
 ```
 
 ### 5. PWA_IWT_HEAT_SCORES (Individual Wave Scores)
-**Records**: 3,814 wave scores (1,901 PWA + 1,913 LiveHeats)
+**Records**: 39,460 wave scores (33,223 PWA + 6,237 LiveHeats)
+
+**Note**: Initial data load contained 80,862 records with 41,402 duplicates (due to multiple scraping runs). Duplicates were removed in January 2026, keeping the earliest scraped version of each record.
 
 ### 6. ATHLETES (Unified Athlete Profiles)
 **Records**: 359 unified athletes
@@ -433,7 +440,8 @@ CREATE TABLE PWA_IWT_HEAT_SCORES (
     INDEX idx_event (pwa_event_id),
     INDEX idx_heat (heat_id),
     INDEX idx_athlete (athlete_id),
-    INDEX idx_counting (counting)
+    INDEX idx_counting (counting),
+    UNIQUE KEY unique_heat_score (source, heat_id, athlete_id, score, type, counting)
 )
 ```
 
@@ -441,7 +449,7 @@ CREATE TABLE PWA_IWT_HEAT_SCORES (
 
 ## Complete Database Status
 
-### Total Records in Database: **7,869 records**
+### Total Records in Database: **43,515 records**
 
 | Table | PWA Records | LiveHeats Records | Total | Status |
 |-------|-------------|-------------------|-------|--------|
@@ -449,10 +457,10 @@ CREATE TABLE PWA_IWT_HEAT_SCORES (
 | PWA_IWT_RESULTS | 1,879 | 173 | 2,052 | ✅ LOADED |
 | PWA_IWT_HEAT_PROGRESSION | 113 | 106 | 219 | ✅ LOADED |
 | PWA_IWT_HEAT_RESULTS | 344 | 449 | 793 | ✅ LOADED |
-| PWA_IWT_HEAT_SCORES | 1,901 | 1,913 | 3,814 | ✅ LOADED |
+| PWA_IWT_HEAT_SCORES | 33,223 | 6,237 | 39,460 | ✅ LOADED & DEDUPLICATED |
 | ATHLETES | - | - | 359 | ✅ LOADED |
 | ATHLETE_SOURCE_IDS | 281 | 233 | 514 | ✅ LOADED |
-| **TOTAL** | **4,636** | **2,874** | **7,869** | ✅ COMPLETE |
+| **TOTAL** | **35,958** | **7,198** | **43,515** | ✅ COMPLETE |
 
 ### Database Views
 
@@ -545,7 +553,7 @@ CREATE TABLE PWA_IWT_HEAT_SCORES (
 - **Years**: 2016-2025
 - **Technology**: Selenium (JavaScript-heavy site)
 - **Data Format**: HTML scraping + XML/JSON APIs
-- **Coverage**: 118 events, 1,879 results, 344 heat results, 1,901 scores
+- **Coverage**: 118 events, 1,879 results, 344 heat results, 33,223 scores (deduplicated)
 
 #### PWA Data Endpoints:
 - Events: `https://www.pwaworldtour.com/index.php?id=2337`
@@ -558,7 +566,7 @@ CREATE TABLE PWA_IWT_HEAT_SCORES (
 - **Years**: 2023+ (recent events)
 - **Technology**: GraphQL API
 - **API Endpoint**: `https://liveheats.com/api/graphql`
-- **Coverage**: 5 matched divisions, 173 results, 449 heat results, 1,913 scores
+- **Coverage**: 5 matched divisions, 173 results, 449 heat results, 6,237 scores (deduplicated)
 
 #### Live Heats GraphQL Organization:
 - Query organization: "WaveTour"
@@ -807,4 +815,4 @@ cd src/scrapers && python merge_heat_scores.py
 
 ---
 
-**Last Updated**: 2025-11-08 (After athlete integration and API development - Phases 1-5 complete, 7,869 records loaded, production API live)
+**Last Updated**: 2026-01-02 (Heat scores table deduplicated - 41,402 duplicates removed, 43,515 clean records in database, production API live)
