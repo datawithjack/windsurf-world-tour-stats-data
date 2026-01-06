@@ -942,6 +942,166 @@ class SiteStatsResponse(BaseModel):
 
 
 # ============================================================================
+# Head-to-Head Models
+# ============================================================================
+
+class AthleteHeadToHeadStats(BaseModel):
+    """
+    Statistics for a single athlete in head-to-head comparison
+    """
+    athlete_id: int = Field(..., description="Unified athlete ID")
+    name: str = Field(..., description="Athlete name")
+    nationality: Optional[str] = Field(None, description="Athlete nationality")
+    place: int = Field(..., description="Final placement in event")
+    profile_image: Optional[str] = Field(None, description="Profile image URL")
+
+    # Heat Score Statistics
+    heat_scores_best: float = Field(..., description="Best overall heat score")
+    heat_scores_avg: float = Field(..., description="Average heat score")
+
+    # Jump Statistics
+    jumps_best: float = Field(..., description="Best individual jump score")
+    jumps_avg_counting: float = Field(..., description="Average counting jump score")
+
+    # Wave Statistics
+    waves_best: float = Field(..., description="Best individual wave score")
+    waves_avg_counting: float = Field(..., description="Average counting wave score")
+
+    # Heat Wins
+    heat_wins: int = Field(..., description="Number of heats won")
+
+    class Config:
+        from_attributes = True
+
+
+class ComparisonMetric(BaseModel):
+    """
+    Single comparison metric between two athletes
+    """
+    winner: str = Field(..., description="Which athlete won this metric ('athlete1', 'athlete2', or 'tie')")
+    difference: float = Field(..., description="Absolute difference between values (always positive)")
+    athlete1_value: float = Field(..., description="Athlete 1's value for this metric")
+    athlete2_value: float = Field(..., description="Athlete 2's value for this metric")
+
+    class Config:
+        from_attributes = True
+
+
+class HeadToHeadComparison(BaseModel):
+    """
+    Comparison calculations between two athletes
+    """
+    heat_scores_best: ComparisonMetric = Field(..., description="Best heat score comparison")
+    heat_scores_avg: ComparisonMetric = Field(..., description="Average heat score comparison")
+    jumps_best: ComparisonMetric = Field(..., description="Best jump score comparison")
+    jumps_avg_counting: ComparisonMetric = Field(..., description="Average counting jump score comparison")
+    waves_best: ComparisonMetric = Field(..., description="Best wave score comparison")
+    waves_avg_counting: ComparisonMetric = Field(..., description="Average counting wave score comparison")
+    heat_wins: ComparisonMetric = Field(..., description="Heat wins comparison (difference is count)")
+
+    class Config:
+        from_attributes = True
+
+
+class HeadToHeadResponse(BaseModel):
+    """
+    Complete head-to-head comparison response
+    """
+    event_id: int = Field(..., description="Event database ID")
+    event_name: str = Field(..., description="Event name")
+    division: str = Field(..., description="Division (Men/Women)")
+
+    athlete1: AthleteHeadToHeadStats = Field(..., description="First athlete's statistics")
+    athlete2: AthleteHeadToHeadStats = Field(..., description="Second athlete's statistics")
+    comparison: HeadToHeadComparison = Field(..., description="Comparison metrics with winners and differences")
+
+    generated_at: datetime = Field(..., description="Timestamp when data was generated (ISO 8601)")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "event_id": 123,
+                "event_name": "2025 Sylt, Germany Grand Slam",
+                "division": "Women",
+                "athlete1": {
+                    "athlete_id": 1,
+                    "name": "Daida Ruano Moreno",
+                    "nationality": "Spain",
+                    "place": 1,
+                    "profile_image": "https://example.com/photo.jpg",
+                    "heat_scores_best": 31.0,
+                    "heat_scores_avg": 24.5,
+                    "jumps_best": 10.0,
+                    "jumps_avg_counting": 7.8,
+                    "waves_best": 7.0,
+                    "waves_avg_counting": 5.89,
+                    "heat_wins": 5
+                },
+                "athlete2": {
+                    "athlete_id": 2,
+                    "name": "Sarah-Quita Offringa",
+                    "nationality": "Aruba",
+                    "place": 2,
+                    "profile_image": "https://example.com/photo2.jpg",
+                    "heat_scores_best": 28.5,
+                    "heat_scores_avg": 22.3,
+                    "jumps_best": 9.5,
+                    "jumps_avg_counting": 7.2,
+                    "waves_best": 6.8,
+                    "waves_avg_counting": 5.5,
+                    "heat_wins": 4
+                },
+                "comparison": {
+                    "heat_scores_best": {
+                        "winner": "athlete1",
+                        "difference": 2.5,
+                        "athlete1_value": 31.0,
+                        "athlete2_value": 28.5
+                    },
+                    "heat_scores_avg": {
+                        "winner": "athlete1",
+                        "difference": 2.2,
+                        "athlete1_value": 24.5,
+                        "athlete2_value": 22.3
+                    },
+                    "jumps_best": {
+                        "winner": "athlete1",
+                        "difference": 0.5,
+                        "athlete1_value": 10.0,
+                        "athlete2_value": 9.5
+                    },
+                    "jumps_avg_counting": {
+                        "winner": "athlete1",
+                        "difference": 0.6,
+                        "athlete1_value": 7.8,
+                        "athlete2_value": 7.2
+                    },
+                    "waves_best": {
+                        "winner": "athlete1",
+                        "difference": 0.2,
+                        "athlete1_value": 7.0,
+                        "athlete2_value": 6.8
+                    },
+                    "waves_avg_counting": {
+                        "winner": "athlete1",
+                        "difference": 0.39,
+                        "athlete1_value": 5.89,
+                        "athlete2_value": 5.5
+                    },
+                    "heat_wins": {
+                        "winner": "athlete1",
+                        "difference": 1.0,
+                        "athlete1_value": 5.0,
+                        "athlete2_value": 4.0
+                    }
+                },
+                "generated_at": "2025-11-14T10:30:00Z"
+            }
+        }
+
+
+# ============================================================================
 # Error Models
 # ============================================================================
 

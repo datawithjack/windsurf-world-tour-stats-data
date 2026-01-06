@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import check_database_health
 from .models import HealthResponse
-from .routes import events, athletes, stats
+from .routes import events, athletes, stats, head_to_head
 
 # Configure logging
 logging.basicConfig(
@@ -117,6 +117,7 @@ async def root():
             "events": "/api/v1/events",
             "athletes": "/api/v1/athletes",
             "stats": "/api/v1/stats",
+            "head_to_head": "/api/v1/events/{event_id}/head-to-head",
             "health": "/health"
         }
     }
@@ -154,6 +155,7 @@ async def health_check():
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(athletes.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
+app.include_router(head_to_head.router, prefix="/api/v1")
 
 
 # ============================================================================
