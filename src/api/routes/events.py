@@ -875,8 +875,9 @@ async def get_athlete_event_stats(
                     FROM PWA_IWT_HEAT_SCORES s2
                     JOIN PWA_IWT_EVENTS e2 ON s2.source = e2.source AND s2.pwa_event_id = e2.event_id
                     JOIN ATHLETE_SOURCE_IDS asi2 ON s2.source = asi2.source AND s2.athlete_id = asi2.source_id
+                    JOIN ATHLETE_SOURCE_IDS asi3 ON asi3.athlete_id = asi2.athlete_id AND asi3.source = e2.source
                     JOIN PWA_IWT_RESULTS r2 ON r2.source = e2.source AND r2.event_id = e2.event_id
-                        AND r2.source = asi2.source AND r2.athlete_id = asi2.source_id
+                        AND r2.athlete_id = asi3.source_id
                     WHERE e2.id = %s
                       AND r2.sex = %s
                       AND s2.type = s.type
