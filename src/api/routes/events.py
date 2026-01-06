@@ -869,7 +869,19 @@ async def get_athlete_event_stats(
             SELECT
                 COALESCE(st.Type_Name, s.type) as move_type,
                 ROUND(MAX(s.score), 2) as best_score,
-                ROUND(AVG(s.score), 2) as average_score
+                ROUND(AVG(s.score), 2) as average_score,
+                (
+                    SELECT ROUND(AVG(s2.score), 2)
+                    FROM PWA_IWT_HEAT_SCORES s2
+                    JOIN PWA_IWT_EVENTS e2 ON s2.source = e2.source AND s2.pwa_event_id = e2.event_id
+                    JOIN ATHLETE_SOURCE_IDS asi2 ON s2.source = asi2.source AND s2.athlete_id = asi2.source_id
+                    JOIN PWA_IWT_RESULTS r2 ON r2.source = e2.source AND r2.event_id = e2.event_id
+                        AND r2.source = asi2.source AND r2.athlete_id = asi2.source_id
+                    WHERE e2.id = %s
+                      AND r2.sex = %s
+                      AND s2.type = s.type
+                      AND COALESCE(s2.counting, FALSE) = TRUE
+                ) as fleet_average
             FROM PWA_IWT_HEAT_SCORES s
             JOIN PWA_IWT_EVENTS e ON s.source = e.source AND s.pwa_event_id = e.event_id
             JOIN ATHLETE_SOURCE_IDS asi ON s.source = asi.source AND s.athlete_id = asi.source_id
@@ -878,7 +890,7 @@ async def get_athlete_event_stats(
             GROUP BY s.type, st.Type_Name
             ORDER BY best_score DESC
         """
-        move_type_results = db.execute_query(move_type_query, (athlete_id, event_id))
+        move_type_results = db.execute_query(move_type_query, (event_id, detected_sex, athlete_id, event_id))
 
         # 7. Get all heat scores with elimination type
         heat_scores_query = """

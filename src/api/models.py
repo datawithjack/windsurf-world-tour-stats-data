@@ -441,6 +441,7 @@ class MoveTypeScore(BaseModel):
     move_type: str = Field(..., description="Move type name (e.g., 'Forward Loop', 'Backloop', 'Wave')")
     best_score: float = Field(..., description="Best score achieved for this move type")
     average_score: float = Field(..., description="Average score for this move type")
+    fleet_average: Optional[float] = Field(None, description="Fleet average score for this move type (counting scores only)")
 
     class Config:
         from_attributes = True
@@ -448,7 +449,8 @@ class MoveTypeScore(BaseModel):
             "example": {
                 "move_type": "Forward Loop",
                 "best_score": 7.10,
-                "average_score": 5.65
+                "average_score": 5.65,
+                "fleet_average": 4.85
             }
         }
 
