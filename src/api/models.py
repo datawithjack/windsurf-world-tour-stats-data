@@ -718,7 +718,7 @@ class ScoreEntry(BaseModel):
     """
     rank: int = Field(..., description="Rank position (sequential, starting at 1)")
     athlete_name: Optional[str] = Field(None, description="Athlete name")
-    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    athlete_id: Optional[int] = Field(None, description="Unified athlete ID (for navigation to athlete profile)")
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
     heat_number: str = Field(..., description="Heat number/identifier")
 
@@ -728,7 +728,7 @@ class ScoreEntry(BaseModel):
             "example": {
                 "rank": 1,
                 "athlete_name": "Degrieck",
-                "athlete_id": "456",
+                "athlete_id": 456,
                 "score": 24.50,
                 "heat_number": "21a"
             }
@@ -749,7 +749,7 @@ class JumpScoreEntry(ScoreEntry):
             "example": {
                 "rank": 1,
                 "athlete_name": "Ruano Moreno",
-                "athlete_id": "789",
+                "athlete_id": 789,
                 "score": 7.10,
                 "move_type": "Forward Loop",
                 "heat_number": "19a"

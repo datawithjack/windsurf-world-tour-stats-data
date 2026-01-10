@@ -234,7 +234,10 @@ async def get_event_stats(
     Returns pre-aggregated statistics for an event including:
     - Summary stats (best heat, jump, and wave scores)
     - Move type statistics (best and average for each move type)
-    - Complete lists of all heat, jump, and wave scores (sorted descending)
+    - Complete lists of ALL heat, jump, and wave scores (sorted by score descending)
+
+    Each score entry includes `athlete_id` (unified integer ID) for navigation to athlete profiles.
+    Frontend handles pagination (10/25/50 rows) using the complete dataset.
 
     **Path Parameters:**
     - `event_id`: Database primary key (id column from PWA_IWT_EVENTS)
@@ -454,12 +457,12 @@ async def get_event_stats(
             else:
                 best_wave_score_obj = ScoreDetail(**best_wave, has_multiple_tied=False, all_tied_scores=None)
 
-        # 4. Get top 10 heat scores
+        # 4. Get all heat scores (sorted by score descending)
         heat_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY hr.result_total DESC) as `rank`,
                 hr.athlete_name,
-                hr.athlete_id,
+                asi_hr.athlete_id,
                 ROUND(hr.result_total, 2) as score,
                 hr.heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
@@ -469,12 +472,11 @@ async def get_event_stats(
             INNER JOIN ATHLETE_SOURCE_IDS asi_r ON r.source = asi_r.source AND r.athlete_id = asi_r.source_id
             WHERE e.id = %s AND r.sex = %s AND asi_hr.athlete_id = asi_r.athlete_id
             ORDER BY hr.result_total DESC
-            LIMIT 10
         """
         heat_scores = db.execute_query(heat_scores_query, (event_id, sex))
         top_heat_scores = [ScoreEntry(**row) for row in heat_scores] if heat_scores else []
 
-        # 5. Get top 10 jump scores (non-Wave)
+        # 5. Get all jump scores (non-Wave, sorted by score descending)
         jump_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY score DESC) as `rank`,
@@ -488,12 +490,11 @@ async def get_event_stats(
               AND sex = %s
               AND move_type != 'Wave'
             ORDER BY score DESC
-            LIMIT 10
         """
         jump_scores = db.execute_query(jump_scores_query, (event_id, sex))
         top_jump_scores = [JumpScoreEntry(**row) for row in jump_scores] if jump_scores else []
 
-        # 6. Get top 10 wave scores
+        # 6. Get all wave scores (sorted by score descending)
         wave_scores_query = """
             SELECT
                 ROW_NUMBER() OVER (ORDER BY score DESC) as `rank`,
@@ -506,7 +507,6 @@ async def get_event_stats(
               AND sex = %s
               AND move_type = 'Wave'
             ORDER BY score DESC
-            LIMIT 10
         """
         wave_scores = db.execute_query(wave_scores_query, (event_id, sex))
         top_wave_scores = [ScoreEntry(**row) for row in wave_scores] if wave_scores else []

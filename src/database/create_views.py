@@ -320,7 +320,8 @@ def create_event_stats_view(cursor):
         -- Score details
         s.id AS score_id,
         s.heat_id,
-        s.athlete_id,
+        a.id AS athlete_id,
+        s.athlete_id AS source_athlete_id,
         a.primary_name AS athlete_name,
         s.sail_number,
         COALESCE(NULLIF(s.sex, ''), hp.sex) AS sex,
