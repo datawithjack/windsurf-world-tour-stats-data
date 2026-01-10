@@ -615,7 +615,7 @@ class ScoreDetail(BaseModel):
     """
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
     athlete_name: str = Field(..., description="Athlete name")
-    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: str = Field(..., description="Heat number/identifier")
 
     # Multiple best scores
@@ -628,7 +628,7 @@ class ScoreDetail(BaseModel):
             "example": {
                 "score": 24.50,
                 "athlete_name": "Degrieck",
-                "athlete_id": "456",
+                "athlete_id": 456,
                 "heat_number": "21a",
                 "has_multiple_tied": False,
                 "all_tied_scores": None
@@ -644,7 +644,7 @@ class JumpScoreDetail(BaseModel):
     """
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
     athlete_name: str = Field(..., description="Athlete name")
-    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: str = Field(..., description="Heat number/identifier")
     move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
 
@@ -658,7 +658,7 @@ class JumpScoreDetail(BaseModel):
             "example": {
                 "score": 7.10,
                 "athlete_name": "Ruano Moreno",
-                "athlete_id": "789",
+                "athlete_id": 789,
                 "heat_number": "19a",
                 "move_type": "Forward Loop",
                 "has_multiple_tied": False,
@@ -674,7 +674,7 @@ class BestScoredBy(BaseModel):
     Used in MoveTypeStat to indicate the athlete who achieved the best score.
     """
     athlete_name: Optional[str] = Field(None, description="Athlete name")
-    athlete_id: Optional[str] = Field(None, description="Athlete ID")
+    athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: str = Field(..., description="Heat number/identifier")
     score: float = Field(..., description="Score value")
 
