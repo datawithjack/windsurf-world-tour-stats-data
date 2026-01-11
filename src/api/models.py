@@ -613,7 +613,7 @@ class ScoreDetail(BaseModel):
 
     Base model for best scores in summary statistics.
     """
-    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    score: Optional[float] = Field(None, description="Score value (rounded to 2 decimal places)")
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: Optional[str] = Field(None, description="Heat number/identifier")
@@ -642,7 +642,7 @@ class JumpScoreDetail(BaseModel):
 
     Extends ScoreDetail with move type information for jump scores.
     """
-    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    score: Optional[float] = Field(None, description="Score value (rounded to 2 decimal places)")
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: Optional[str] = Field(None, description="Heat number/identifier")
@@ -676,7 +676,7 @@ class BestScoredBy(BaseModel):
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
     heat_number: Optional[str] = Field(None, description="Heat number/identifier")
-    score: float = Field(..., description="Score value")
+    score: Optional[float] = Field(None, description="Score value")
 
     class Config:
         from_attributes = True
@@ -719,7 +719,7 @@ class ScoreEntry(BaseModel):
     rank: int = Field(..., description="Rank position (sequential, starting at 1)")
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID (for navigation to athlete profile)")
-    score: float = Field(..., description="Score value (rounded to 2 decimal places)")
+    score: Optional[float] = Field(None, description="Score value (rounded to 2 decimal places)")
     heat_number: Optional[str] = Field(None, description="Heat number/identifier")
 
     class Config:
