@@ -614,9 +614,9 @@ class ScoreDetail(BaseModel):
     Base model for best scores in summary statistics.
     """
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
-    athlete_name: str = Field(..., description="Athlete name")
+    athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
-    heat_number: str = Field(..., description="Heat number/identifier")
+    heat_number: Optional[str] = Field(None, description="Heat number/identifier")
 
     # Multiple best scores
     has_multiple_tied: bool = Field(False, description="True if multiple athletes are tied for this best score")
@@ -643,10 +643,10 @@ class JumpScoreDetail(BaseModel):
     Extends ScoreDetail with move type information for jump scores.
     """
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
-    athlete_name: str = Field(..., description="Athlete name")
+    athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
-    heat_number: str = Field(..., description="Heat number/identifier")
-    move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
+    heat_number: Optional[str] = Field(None, description="Heat number/identifier")
+    move_type: Optional[str] = Field(None, description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
 
     # Multiple best scores
     has_multiple_tied: bool = Field(False, description="True if multiple athletes are tied for this best score")
@@ -675,7 +675,7 @@ class BestScoredBy(BaseModel):
     """
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID")
-    heat_number: str = Field(..., description="Heat number/identifier")
+    heat_number: Optional[str] = Field(None, description="Heat number/identifier")
     score: float = Field(..., description="Score value")
 
     class Config:
@@ -688,9 +688,9 @@ class MoveTypeStat(BaseModel):
 
     Aggregated statistics for a specific move type (e.g., Wave, Forward Loop).
     """
-    move_type: str = Field(..., description="Move type name")
+    move_type: Optional[str] = Field(None, description="Move type name")
     best_score: float = Field(..., description="Highest score for this move type")
-    average_score: float = Field(..., description="Average score for this move type (rounded to 2 decimals)")
+    average_score: Optional[float] = Field(None, description="Average score for this move type (rounded to 2 decimals)")
     best_scored_by: BestScoredBy = Field(..., description="Athlete who scored the best")
 
     class Config:
@@ -720,7 +720,7 @@ class ScoreEntry(BaseModel):
     athlete_name: Optional[str] = Field(None, description="Athlete name")
     athlete_id: Optional[int] = Field(None, description="Unified athlete ID (for navigation to athlete profile)")
     score: float = Field(..., description="Score value (rounded to 2 decimal places)")
-    heat_number: str = Field(..., description="Heat number/identifier")
+    heat_number: Optional[str] = Field(None, description="Heat number/identifier")
 
     class Config:
         from_attributes = True
@@ -741,7 +741,7 @@ class JumpScoreEntry(ScoreEntry):
 
     Extends ScoreEntry with move type for jump scores.
     """
-    move_type: str = Field(..., description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
+    move_type: Optional[str] = Field(None, description="Jump move type (e.g., 'Forward Loop', 'Backloop')")
 
     class Config:
         from_attributes = True
