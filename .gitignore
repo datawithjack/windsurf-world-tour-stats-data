@@ -103,10 +103,13 @@ geckodriver.exe
 *.html
 *.htm
 
+# Claude Code local settings (should not be shared)
+.claude/settings.local.json
+
 # Keep important config/documentation files (override)
 !requirements.txt
 !.claude/
-!.claude/**/*
+!.claude/CLAUDE.md
 !PROJECT_PLAN.md
 !DEPLOYMENT.md
 !README.md
