@@ -352,7 +352,7 @@ async def get_event_stats(
             SELECT
                 ROUND(hr.result_total, 2) as score,
                 hr.athlete_name,
-                hr.athlete_id,
+                asi_hr.athlete_id,
                 hr.heat_id as heat_number
             FROM PWA_IWT_HEAT_RESULTS hr
             INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
@@ -373,7 +373,7 @@ async def get_event_stats(
                 SELECT
                     ROUND(hr.result_total, 2) as score,
                     hr.athlete_name,
-                    hr.athlete_id,
+                    asi_hr.athlete_id,
                     hr.heat_id as heat_number
                 FROM PWA_IWT_HEAT_RESULTS hr
                 INNER JOIN PWA_IWT_EVENTS e ON hr.source = e.source AND hr.pwa_event_id = e.event_id
